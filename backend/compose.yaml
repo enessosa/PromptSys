@@ -1,0 +1,9 @@
+services:
+  postgres:
+    image: 'postgres:18'
+    environment:
+      - 'POSTGRES_DB=promptsys'
+      - 'POSTGRES_USER=promptsys'
+      - 'POSTGRES_PASSWORD=promptsys'
+    ports:
+      - '5432:5432'

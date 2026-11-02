@@ -1,0 +1,34 @@
+spring:
+  application:
+    name: promptsys
+  threads:
+    virtual:
+      enabled: true          # one virtual thread per request, cheap blocking calls to the LLM
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/promptsys}
+    username: ${DB_USER:promptsys}
+    password: ${DB_PASSWORD:promptsys}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate     # schema is owned by Flyway
+  flyway:
+    enabled: true
+  ai:
+    anthropic:
+      api-key: ${ANTHROPIC_API_KEY:}   # optional: the app starts without it, LLM calls fail until it is set
+      chat:
+        options:
+          model: ${ANTHROPIC_MODEL:claude-opus-5-5}
+          temperature: 0.2   # low temperature reduces noise between ablation runs
+
+promptsys:
+  jwt:
+    secret: ${JWT_SECRET}    # at least 256 bits for HS256
+    expiration: 1h
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
