@@ -75,7 +75,7 @@ Version 1 uses **self-citation + similarity ablation**, both of which work with 
 
 | Layer | Technology |
 |---|---|
-| Backend | Java, Spring Boot |
+| Backend | Python, FastAPI |
 | Frontend | React |
 | Database | PostgreSQL |
 | LLM | Anthropic Claude API |

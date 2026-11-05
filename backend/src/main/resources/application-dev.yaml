@@ -1,9 +1,0 @@
-# Local development. PostgreSQL is started from compose.yaml by Spring Boot's Docker Compose support,
-# which also overrides the datasource settings.
-promptsys:
-  jwt:
-    secret: ${JWT_SECRET:dev-only-secret-change-me-0123456789abcdef}
-
-logging:
-  level:
-    org.hibernate.SQL: debug

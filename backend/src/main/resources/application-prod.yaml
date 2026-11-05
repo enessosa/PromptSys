@@ -1,6 +1,0 @@
-# Docker image. All values come from environment variables (see docs/SpringBoot.md).
-springdoc:
-  api-docs:
-    enabled: false
-  swagger-ui:
-    enabled: false

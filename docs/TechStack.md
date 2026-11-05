@@ -6,7 +6,7 @@
 
 | Layer | Technology |
 |---|---|
-| Backend | Java 25, Spring Boot 4, Maven (details in [SpringBoot.md](SpringBoot.md)) |
+| Backend | Python 3.14, FastAPI, uv (details in [FastAPI.md](FastAPI.md)) |
 | Frontend | React 19, TypeScript, Vite |
 | Database | PostgreSQL |
 | LLM | Anthropic Claude API |
