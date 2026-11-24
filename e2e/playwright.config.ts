@@ -36,6 +36,7 @@ export default defineConfig({
       E2E_DATA_DIR: dataDir,
       FRONTEND_DIST: frontendDist,
       PROMPTSYS_FAKE_LLM: '1',
+      PROMPTSYS_FAKE_AGENT: '1',
       NODE_ENV: 'test',
       ANTHROPIC_API_KEY: '',
       EMBEDDING_CACHE_DIR: resolve(dataDir, 'models'),

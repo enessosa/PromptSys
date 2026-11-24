@@ -13,6 +13,8 @@ test('chat: a card in the tray is cited in the streamed answer and listed as use
   const answer = page.getByRole('article', { name: 'Answer' })
   await expect(answer).toContainText('This is a fake answer based on the card')
   // The citation marker becomes a chip for this card, and the card row lists it as used.
+  // While the stream hands over to the stored answer, the chip can show twice for a moment; wait for the final state.
+  await expect(answer.getByRole('button', { name: `Open [c${card.id}]` })).toHaveCount(1)
   await expect(answer.getByRole('button', { name: `Open [c${card.id}]` })).toBeVisible()
   const row = answer.getByLabel('Cards of this answer')
   await expect(row).toContainText('used')
