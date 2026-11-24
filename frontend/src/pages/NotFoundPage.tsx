@@ -3,9 +3,9 @@ import { Link as RouterLink } from 'react-router'
 
 function NotFoundPage() {
   return (
-    <main>
+    <main style={{ padding: 24 }}>
       <Heading as="h1">Page not found</Heading>
-      <Link as={RouterLink} to="/">Back to chat</Link>
+      <Link as={RouterLink} to="/">Back to the workspace</Link>
     </main>
   )
 }

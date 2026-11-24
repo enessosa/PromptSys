@@ -1,0 +1,90 @@
+/*
+ * Dark theme tokens (Draft, "Visual style"). Dark only in v1.
+ * Surfaces: sidebar darkest, main area, raised panels. One accent colour, defined once.
+ */
+:root {
+  color-scheme: dark;
+  --ps-accent: #5eb5a6;
+  --ps-accent-muted: rgb(94 181 166 / 0.16);
+  --ps-bg-sidebar: #16171a;
+  --ps-bg-main: #1c1d21;
+  --ps-bg-raised: #232429;
+  --ps-border: #2e3036;
+  --ps-text: #d7d9de;
+  --ps-text-muted: #8a8f98;
+  --ps-danger: #e5736d;
+  --ps-font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --ps-font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --ps-fade: 120ms;
+}
+
+/* Map the tokens onto Primer's variables; the doubled attribute selector wins over the primitives CSS. */
+[data-color-mode][data-color-mode][data-dark-theme][data-dark-theme] {
+  --bgColor-default: var(--ps-bg-main);
+  --bgColor-muted: var(--ps-bg-sidebar);
+  --bgColor-inset: var(--ps-bg-sidebar);
+  --bgColor-neutral-muted: var(--ps-bg-raised);
+  --overlay-bgColor: var(--ps-bg-raised);
+  --borderColor-default: var(--ps-border);
+  --borderColor-muted: var(--ps-border);
+  --fgColor-default: var(--ps-text);
+  --fgColor-muted: var(--ps-text-muted);
+  --fgColor-accent: var(--ps-accent);
+  --bgColor-accent-emphasis: var(--ps-accent);
+  --bgColor-accent-muted: var(--ps-accent-muted);
+  --borderColor-accent-emphasis: var(--ps-accent);
+  --button-primary-bgColor-rest: var(--ps-accent);
+  --button-primary-bgColor-hover: #6fc4b5;
+  --button-primary-bgColor-active: #54a597;
+  --button-primary-fgColor-rest: #10201d;
+  --button-default-bgColor-rest: var(--ps-bg-raised);
+  --control-bgColor-rest: var(--ps-bg-raised);
+  --focus-outlineColor: var(--ps-accent);
+  --base-text-weight-normal: 400;
+}
+
+/* The theme provider renders a wrapper div between #root and the app; it must fill the window too. */
+#root > [data-color-mode] {
+  height: 100%;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--ps-bg-main);
+  color: var(--ps-text);
+  font-family: var(--ps-font-ui);
+  font-size: 13.5px;
+  line-height: 1.5;
+  overflow: hidden;
+}
+
+button {
+  font-family: inherit;
+}
+
+::selection {
+  background: var(--ps-accent-muted);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ps-border) transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --ps-fade: 0ms;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
