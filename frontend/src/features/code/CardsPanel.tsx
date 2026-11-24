@@ -8,7 +8,10 @@ import styles from './code.module.css'
 
 const REVIEW_LABEL: Record<ReviewStatus, string> = { proposed: 'Proposed', confirmed: 'Confirmed', corrected: 'Corrected', rejected: 'Rejected' }
 
-/** Right-hand panel: cards the agent recorded in this session, to confirm, correct or reject. */
+/**
+ * Right-hand panel: cards the agent proposed in this session, to confirm, correct or reject. A reviewed card leaves the list;
+ * confirmed and corrected ones join the card library and the graph, rejected ones never do.
+ */
 export function CardsPanel({ sessionId }: { sessionId: number }) {
   const cards = useSessionCards(sessionId)
   const review = useReviewCard(sessionId)
@@ -16,9 +19,9 @@ export function CardsPanel({ sessionId }: { sessionId: number }) {
   return (
     <aside className={styles.panel} aria-label="Cards from this session">
       <h3>Cards from this session</h3>
-      <p className={styles.note}>Confirmed and corrected cards bind later turns of sessions in this project.</p>
+      <p className={styles.note}>Proposed by the agent. Confirmed or corrected cards join the library and bind later turns in this project; rejected ones are dropped.</p>
       {cards.isError && <p role="alert" className={styles.error}>{cards.error.message}</p>}
-      {!cards.isError && list.length === 0 && <p className={styles.note}>No cards yet.</p>}
+      {!cards.isError && list.length === 0 && <p className={styles.note}>Nothing to review.</p>}
       <ul>
         {list.map((c) => (
           <CardRow key={`${c.id}:${c.version}`} card={c} busy={review.isPending} onReview={(patch) => review.mutate({ id: c.id, ...patch })} />

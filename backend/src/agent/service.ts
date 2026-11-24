@@ -161,9 +161,9 @@ export function createAgentService(db: DatabaseSync, runner: AgentRunner) {
     return {
       async findCards({ query }) {
         const root = cardRoot(toSession(row(sessionId)).projectPath)
-        const found = cards.list({ includeArchived: false, ...(query?.trim() ? { query: query.trim() } : { folder: root }) }).slice(0, 50)
+        const found = cards.list({ includeArchived: false, includeProposed: true, ...(query?.trim() ? { query: query.trim() } : { folder: root }) }).slice(0, 50)
         if (found.length === 0) return query ? `No cards match "${query}".` : `No cards in the project folder "${root}" yet.`
-        return found.map((c) => `[c${c.id}] ${c.title} (folder: ${c.folderPath || '/'})`).join('\n')
+        return found.map((c) => `[c${c.id}] ${c.title} (folder: ${c.folderPath || '/'})${c.reviewStatus === 'proposed' ? ' – proposed, not reviewed yet' : ''}`).join('\n')
       },
       async recordCard({ title: cardTitle, body, folder, linkTo }) {
         // One card per term and project: a rejected term is refused, an existing one is reused instead of duplicated.
@@ -363,10 +363,11 @@ export function createAgentService(db: DatabaseSync, runner: AgentRunner) {
       return () => set.delete(listener)
     },
 
+    /** Cards of the session still waiting for review; confirmed, corrected and rejected ones leave the list. */
     sessionCards(id: number): CardReview[] {
       row(id)
       return db
-        .prepare("SELECT id, title, body, review_status, version FROM cards WHERE code_session_id = ? AND origin = 'agent' ORDER BY id")
+        .prepare("SELECT id, title, body, review_status, version FROM cards WHERE code_session_id = ? AND origin = 'agent' AND review_status = 'proposed' AND archived_at IS NULL ORDER BY id")
         .all(id)
         .map((c) => ({ id: c.id as number, title: c.title as string, body: c.body as string, reviewStatus: c.review_status as string, version: c.version as number }))
     },

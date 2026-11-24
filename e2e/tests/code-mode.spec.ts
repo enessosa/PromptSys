@@ -69,7 +69,8 @@ test('claude code mode: session, echo, card, approval, review, second session, b
     const row = panel.getByRole('listitem').filter({ hasText: 'Understanding: explain the build' })
     await expect(row).toContainText('Proposed')
     await row.getByRole('button', { name: 'Confirm' }).click()
-    await expect(row).toContainText('Confirmed')
+    // Reviewed cards leave the list and join the library.
+    await expect(row).toHaveCount(0)
 
     // Subagent: shown in the Agents tab (selected automatically); "Show" in the timeline expands it.
     await box.fill('start an agent')

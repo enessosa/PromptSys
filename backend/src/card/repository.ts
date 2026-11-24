@@ -59,7 +59,7 @@ export type NewCard = {
   /** Only set for uploaded files. */
   sourceName?: string
   mimeType?: string
-  /** Only set for cards recorded by a Claude Code session. */
+  /** Only set for cards recorded by an agent session. */
   agent?: { sessionId: number; reviewStatus: ReviewStatus }
 }
 
@@ -70,7 +70,12 @@ export type CardFilter = {
   kind?: CardKind
   folder?: string
   includeArchived: boolean
+  /** Also agent cards still waiting for review (for the agent's own duplicate check); rejected ones never. */
+  includeProposed?: boolean
 }
+
+/** Agent cards join the library (list, tree, graph) only once the user confirmed or corrected them; proposed and rejected ones stay out. */
+const ACCEPTED = "(review_status IS NULL OR review_status IN ('confirmed', 'corrected'))"
 
 export function createCardRepository(db: DatabaseSync) {
   const rowOf = (id: number): Row => {
@@ -159,6 +164,7 @@ export function createCardRepository(db: DatabaseSync) {
       const where: string[] = []
       const values: SQLInputValue[] = []
       if (!filter.includeArchived) where.push('archived_at IS NULL')
+      where.push(filter.includeProposed ? "(review_status IS NULL OR review_status <> 'rejected')" : ACCEPTED)
       if (filter.kind) {
         where.push('kind = ?')
         values.push(filter.kind)
@@ -286,7 +292,7 @@ export function createCardRepository(db: DatabaseSync) {
 
     /** Active cards as nodes, and the links between them (both ends must be nodes of the result). */
     graph(filter: { folder?: string; kind?: CardKind }): { nodes: GraphNode[]; links: Link[] } {
-      const where = ['archived_at IS NULL']
+      const where = ['archived_at IS NULL', ACCEPTED]
       const values: SQLInputValue[] = []
       if (filter.kind) {
         where.push('kind = ?')

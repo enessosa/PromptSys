@@ -169,7 +169,7 @@ describe('turns with the fake agent', () => {
     expect(list.find((e) => e.type === 'tool_call' && e.payload.name === 'Agent')?.payload.parentToolUseId).toBeUndefined()
   })
 
-  it('exposes origin and reviewStatus on cards (null for user cards) and in the graph', async () => {
+  it('keeps agent cards out of the library until the user accepts them, and lists only open ones for review', async () => {
     const { send, codeMode, session, waitFor } = setup()
     await codeMode()
     const user = (await send('POST', '/cards', { title: 'mine' })).body
@@ -177,10 +177,16 @@ describe('turns with the fake agent', () => {
     const s = await session()
     await send('POST', `/code/sessions/${s.id}/messages`, { text: 'hello' })
     await waitFor(s.id, 'idle')
-    const list = (await send('GET', '/cards')).body
-    expect(list.map((c: { origin: string | null }) => c.origin)).toEqual([null, 'agent'])
-    const graph = (await send('GET', '/graph')).body
-    expect(graph.nodes.map((n: { reviewStatus: string | null }) => n.reviewStatus)).toEqual([null, 'proposed'])
+    // Proposed: only in the review list of the session.
+    expect((await send('GET', '/cards')).body.map((c: { origin: string | null }) => c.origin)).toEqual([null])
+    expect((await send('GET', '/graph')).body.nodes).toHaveLength(1)
+    const [proposed] = (await send('GET', `/code/sessions/${s.id}/cards`)).body
+    expect(proposed).toMatchObject({ reviewStatus: 'proposed' })
+    // Confirmed: joins the library and the graph, leaves the review list.
+    await send('PATCH', `/code/cards/${proposed.id}`, { reviewStatus: 'confirmed' })
+    expect((await send('GET', '/cards')).body.map((c: { origin: string | null }) => c.origin)).toEqual([null, 'agent'])
+    expect((await send('GET', '/graph')).body.nodes.map((n: { reviewStatus: string | null }) => n.reviewStatus)).toEqual([null, 'confirmed'])
+    expect((await send('GET', `/code/sessions/${s.id}/cards`)).body).toEqual([])
   })
 
   it('replays a tool call after an allowed approval and writes nothing for a denied one', async () => {
@@ -240,7 +246,8 @@ describe('turns with the fake agent', () => {
     await send('POST', `/code/sessions/${b.id}/approvals/${await approvalOf(b.id)}`, { allow: true })
     await waitFor(a.id, 'idle')
     await waitFor(b.id, 'idle')
-    expect((await send('GET', '/cards')).body).toHaveLength(2)
+    expect((await send('GET', `/code/sessions/${a.id}/cards`)).body).toHaveLength(1)
+    expect((await send('GET', `/code/sessions/${b.id}/cards`)).body).toHaveLength(1)
   })
 
   it('streams events over SSE', async () => {
@@ -332,9 +339,9 @@ describe('card review and binding', () => {
     await send('POST', `/code/sessions/${s.id}/messages`, { text: 'first task' })
     await waitFor(s.id, 'idle')
     expect(prompts[2]).toBe(`<promptsys-cards>\nRejected by the user, do not record again: ${card.title}\n</promptsys-cards>\n\nfirst task`)
-    const after = (await send('GET', `/code/sessions/${s.id}/cards`)).body
-    expect(after).toHaveLength(1)
-    expect(after[0]).toMatchObject({ id: card.id, reviewStatus: 'rejected' })
+    // Nothing new to review; the rejected card stays out of the list but is kept (it blocks the term).
+    expect((await send('GET', `/code/sessions/${s.id}/cards`)).body).toEqual([])
+    expect((await send('GET', `/cards/${card.id}`)).body).toMatchObject({ reviewStatus: 'rejected' })
   })
 
   it('prepends only confirmed and corrected cards of the same project to the prompt', async () => {
@@ -578,7 +585,7 @@ describe('git info and changes', () => {
     const root = cardRoot(s.projectPath)
     expect((await send('GET', '/cards/1')).body.folderPath).toBe(`${root}/backend/agent`)
     expect((await send('GET', '/cards/2')).body.folderPath).toBe(`${root}/etc`)
-    expect(found).toBe(`[c1] Agent runner (folder: ${root}/backend/agent)\n[c2] Escape (folder: ${root}/etc)`)
+    expect(found).toBe(`[c1] Agent runner (folder: ${root}/backend/agent) – proposed, not reviewed yet\n[c2] Escape (folder: ${root}/etc) – proposed, not reviewed yet`)
     expect(none).toBe('No cards match "nothing like this".')
   })
 
