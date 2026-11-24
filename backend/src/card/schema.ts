@@ -6,6 +6,8 @@ export const LINK_KINDS = ['related', 'derived_from', 'part_of', 'contradicts'] 
 
 export type CardKind = (typeof CARD_KINDS)[number]
 export type LinkKind = (typeof LINK_KINDS)[number]
+export const REVIEW_STATUSES = ['proposed', 'confirmed', 'corrected', 'rejected'] as const
+export type ReviewStatus = (typeof REVIEW_STATUSES)[number]
 
 const title = z.string().trim().min(1).max(200)
 const body = z.string().max(200_000)
@@ -84,6 +86,9 @@ export type CardSummary = {
   archivedAt: string | null
   createdAt: string
   updatedAt: string
+  /** `'agent'` for cards recorded by a Claude Code session, `null` for user cards. */
+  origin: 'agent' | null
+  reviewStatus: ReviewStatus | null
 }
 
 export type Card = Omit<CardSummary, 'excerpt'> & {
@@ -103,6 +108,8 @@ export type GraphNode = {
   x: number | null
   y: number | null
   degree: number
+  origin: 'agent' | null
+  reviewStatus: ReviewStatus | null
 }
 
 export type CardVersion = { version: number; title: string; body: string; createdAt: string }

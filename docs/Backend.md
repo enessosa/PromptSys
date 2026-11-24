@@ -66,6 +66,7 @@ Folders are organized by feature, not by layer: each folder holds its own routes
 | `src/citation` | Parsing of citation markers like `[c3]`: streaming state machine and final re-parse |
 | `src/ablation` | Similarity ablation: `embedding.ts` (embedder), `score.ts` (cosine, noise, labels), `service.ts`, `routes.ts` |
 | `src/rules` | Derived rules: tool-use extraction (`service.ts`), `repository.ts`, `routes.ts`, `schema.ts` |
+| `src/agent` | Claude Code mode: `runner.ts` (interface `AgentRunner`, `AgentEvent`), `sdk.ts` (real runner on `@anthropic-ai/claude-agent-sdk`, pure `mapSdkMessage` and `preToolUseDecision`), `fake.ts` (deterministic runner), `service.ts` (sessions, event log, approvals, binding), `routes.ts` |
 | `src/settings` | Non-secret settings in the `settings` table, `GET/PUT /api/settings` |
 | `src/llm` | Claude API access (`complete`, `callTool` for forced tool calls, `stream`), optional `temperature`, API key check, mapping of SDK errors to `llm_*` error codes |
 | `src/db` | SQLite connection (`openDatabase`), migration runner (`migrate`) and `transaction` helper |
@@ -201,6 +202,41 @@ Settings, ablation and rules endpoints are listed in [Settings](#settings), [Abl
 | `baselineRuns` (`k`) | integer 0..10 | `3` |
 | `ablationTemperature` | number 0..1 | `0.2` |
 | `accentColor` | `#rrggbb` or `null` | `null` |
+| `mode` | `api` or `claude_code` | `api` |
+| `codeAuth` | `local_login` or `api_key` | `local_login` |
+
+## Claude Code mode (`src/agent`)
+
+A second mode (`mode = claude_code`) shares the card library and the graph. The main view is a coding-agent session that runs through `@anthropic-ai/claude-agent-sdk` with the user's own local Claude Code login (PromptSys never sees or stores the login). With `codeAuth = local_login` the environment given to the SDK has `ANTHROPIC_API_KEY` removed; `api_key` passes it through. Migration `0005_code_mode.sql` adds `code_sessions`, `code_events` and the card columns `origin` (`agent` or `NULL` for user cards), `review_status` (`proposed`, `confirmed`, `corrected`, `rejected`) and `code_session_id`. At startup, sessions left in `running` or `waiting_approval` are set to `stopped`.
+
+- `AgentRunner` (`runner.ts`) is the only thing the service knows. `createSdkRunner()` is the real one; `createFakeRunner()` (selected with `PROMPTSYS_FAKE_AGENT=1`) answers deterministically without network or disk access, for tests and end-to-end tests. `createApp({ agentRunner })` overrides the runner.
+- The SDK runner loads user and project settings (`settingSources: ['user', 'project']`, so skills and slash commands work), uses the `claude_code` system prompt preset with card instructions appended, and offers the tools `record_card` and `link_cards` through an in-process MCP server (`promptsys`). A `PreToolUse` hook is the approval gate: `Read`, `Glob`, `Grep`, `LS`, `TodoWrite` and the own `mcp__promptsys__*` tools run on their own, everything else waits for the user's answer.
+- One running turn per session (`409 session_busy`), any number of sessions in parallel. Every event is stored in `code_events` (`seq` counts up per session) and sent to SSE subscribers.
+- Binding: confirmed and corrected agent cards of the same project path are put in front of the prompt as a `<promptsys-cards>` block (`[cN] title: body`). Not for prompts that start with `/` (a slash command has to stay first). `proposed` and `rejected` cards are never injected.
+- Agent cards are `note` cards in the folder `<project folder name>/<folder>`; `record_card` takes an optional `folder` (sanitised, `..` dropped), and the tool `find_cards` (text search over the library, or the project folder's cards without a query) lets the agent avoid duplicates and reuse folders. `[cN]` references in a user message add those cards (title, folder, body up to 8000 characters, at most 20) to the prompt's `<promptsys-cards>` block under "Referenced by the user in this message". Card responses (`/cards`, `/cards/:id`, `/graph` nodes) have `origin` and `reviewStatus` (`null` for user cards).
+
+| Endpoint | Description |
+|---|---|
+| `GET /api/code/status` | `{ available, reason?, mode, codeAuth }`; works in both modes |
+| `GET /api/code/sessions` | Sessions `{ id, title, projectPath, status, permissionMode, createdAt, updatedAt }` |
+| `POST /api/code/sessions` | `{ projectPath, title? }` → `201`; `422 invalid_project_path` unless it is an absolute path to an existing folder; the title defaults to the folder name |
+| `GET /api/code/sessions/:id` | `{ session, slashCommands, events: [{ seq, type, payload, createdAt }] }` |
+| `PATCH /api/code/sessions/:id` | `{ title?, permissionMode? }` (at least one) → the session. `permissionMode`: `default` (Ask), `acceptEdits` (Edit/Write/NotebookEdit/MultiEdit with a path inside the project run without asking), `plan` (SDK plan mode), `auto` (SDK decides; the hook gives no decision and what the SDK still asks reaches the user through `canUseTool` and the approval flow). `bypassPermissions` is not offered. Persisted (migration `0006_code_permission_mode.sql`), also applied to a running turn (`Query.setPermissionMode`), emits a `mode` event |
+| Stream events `mode`, `context`, `usage`, `plan_usage` | `mode { mode }` when the permission mode changes; `context { percentage, totalTokens, maxTokens }` after each turn (SDK `getContextUsage`, else computed from the result's `modelUsage`); `usage { input, output, cacheRead, cacheCreation }` tokens of that turn (from the result's `usage`; the session total is the sum over these events); `plan_usage { fiveHour?, sevenDay?: { utilization, resetsAt }, subscriptionType }` plan rate limits (experimental SDK usage API, 5 s timeout; not emitted for API keys or on failure) |
+| `GET /api/code/plan-usage` | Account-wide plan limits: the newest `plan_usage` payload of any session plus `observedAt`, or `null` before the first report. Shown once under the session list, since per-session values of different ages would contradict each other. |
+| `DELETE /api/code/sessions/:id` | `204`, stops a running turn |
+| `GET /api/code/sessions/:id/git` | `{ isGitRepo, branch?, dirty? }` (`git` via `execFile`, no shell, `cwd` = project; a non-git folder gives `{ isGitRepo: false }`) |
+| `GET /api/code/sessions/:id/changes` | `{ isGitRepo, files: [{ path, oldPath?, status, added, removed, diff, truncated }] }`; `status` is `modified`, `added`, `deleted`, `untracked` or `renamed`; uncommitted changes against `HEAD` (staged, unstaged, untracked) with a unified diff per file, cut at 200 KB (`truncated`) |
+| `POST /api/code/sessions/:id/messages` | `{ text }` → `202 { accepted: true }`; `409 session_busy` |
+| `GET /api/code/sessions/:id/stream` | SSE; per event `event: <type>`, `data: { seq, ...payload }`. Load the history first, then subscribe and ignore `seq` that you have seen |
+| `POST /api/code/sessions/:id/approvals/:approvalId` | `{ allow, message? }` → `204`; `404 approval_not_found` |
+| `POST /api/code/sessions/:id/stop` | `204`; aborts the turn and denies open approvals (status `stopped`) |
+| `GET /api/code/sessions/:id/cards` | Agent cards of the session `{ id, title, body, reviewStatus, version }` |
+| `PATCH /api/code/cards/:id` | `{ reviewStatus?: 'confirmed' \| 'rejected', title?, body? }`; changed text writes a new card version and sets `corrected` |
+
+Event types: `user`, `init`, `text`, `tool_call`, `tool_result`, `approval_request`, `approval_resolved`, `card` (`action: created` for a new card, `linked` with the `cardId` of a card that got a link), `status`, `result`, `error`.
+
+Mode gating: all `/api/code/*` routes except `status` answer `409 feature_requires_claude_code_mode` in `api` mode. In `claude_code` mode these answer `409 feature_requires_api_mode`, because PromptSys would create extra requests itself: starting an ablation (not the dry run), a replay with `mode: 'auto'` and `POST /api/replays/:timelineId/auto`. Step-by-step replay and the explicit rules button (`POST /api/messages/:id/rules`) stay available; there is no automatic rule extraction in the backend.
 
 ## Ablation (`src/ablation`)
 

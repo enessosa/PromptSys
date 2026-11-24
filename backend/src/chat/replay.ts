@@ -6,6 +6,7 @@ import { assemblePrompt } from '../assembly/index.ts'
 import { AppError, errorBody } from '../common/errors.ts'
 import { idSchema, parse, parseBody } from '../common/validation.ts'
 import { transaction } from '../db/index.ts'
+import { requireMode } from '../settings/index.ts'
 import type { LlmClient } from '../llm/index.ts'
 import { applyContextChanges } from './context-changes.ts'
 import { runGeneration, streamGeneration, type Generation, type GenerationRegistry } from './generation.ts'
@@ -98,6 +99,7 @@ export function replayRoutes({ db, repo, registry, requireLlm, refuseIfRunning }
 
   routes.post('/', async (c) => {
     const body = await parseBody(c, createReplaySchema)
+    if (body.mode === 'auto') requireMode(db, 'api')
     const from = repo.getMessage(body.fromMessageId)
     const conversation = repo.getConversation(from.conversationId)
 
@@ -213,6 +215,7 @@ export function replayRoutes({ db, repo, registry, requireLlm, refuseIfRunning }
   })
 
   routes.post('/:timelineId/auto', (c) => {
+    requireMode(db, 'api')
     const id = idParam(c.req.param('timelineId'))
     const timeline = requirePausedReplay(repo, id, autoRuns)
     const prompts = remainingPrompts(repo, timeline)

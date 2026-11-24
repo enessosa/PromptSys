@@ -1,5 +1,6 @@
 // Helpers for tests only: an app on a fresh in-memory database and a stub for the Claude client.
 import type { Embedder } from './ablation/embedding.ts'
+import { createFakeRunner, type AgentRunner } from './agent/index.ts'
 import { createApp } from './app.ts'
 import { estimateTokens } from './assembly/index.ts'
 import { migrate, openDatabase } from './db/index.ts'
@@ -84,9 +85,9 @@ export function createFakeEmbedder(): Embedder & { calls: string[][] } {
   }
 }
 
-/** A new app with an in-memory SQLite database (all migrations applied), by default a stub LLM (`null`: no API key) and the fake embedder. */
-export function createTestApp(llm: LlmClient | null = createStubLlm('stub answer'), embedder: Embedder = createFakeEmbedder()) {
+/** A new app with an in-memory SQLite database (all migrations applied), by default a stub LLM (`null`: no API key), the fake embedder and the fake agent. */
+export function createTestApp(llm: LlmClient | null = createStubLlm('stub answer'), embedder: Embedder = createFakeEmbedder(), agentRunner: AgentRunner = createFakeRunner()) {
   const db = openDatabase(':memory:')
   migrate(db)
-  return { app: createApp({ db, llm: llm ?? undefined, embedder }), db, llm, embedder }
+  return { app: createApp({ db, llm: llm ?? undefined, embedder, agentRunner }), db, llm, embedder }
 }

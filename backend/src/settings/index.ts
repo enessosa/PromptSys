@@ -2,6 +2,7 @@
 import { Hono } from 'hono'
 import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
+import { AppError } from '../common/errors.ts'
 import { parseBody } from '../common/validation.ts'
 
 const defaultModel = z.string().trim().min(1).max(100).nullable()
@@ -14,6 +15,8 @@ export const settingsFields = {
   baselineRuns: z.number().int().min(0).max(10),
   ablationTemperature: z.number().min(0).max(1),
   accentColor,
+  mode: z.enum(['api', 'claude_code']),
+  codeAuth: z.enum(['local_login', 'api_key']),
 }
 
 export type AppSettings = {
@@ -26,6 +29,10 @@ export type AppSettings = {
   ablationTemperature: number
   /** UI accent colour as `#rrggbb`, `null` = theme default. */
   accentColor: string | null
+  /** `api`: chat with exact control over the context. `claude_code`: coding-agent sessions on the user's local Claude Code. */
+  mode: 'api' | 'claude_code'
+  /** `local_login`: the SDK uses the local Claude Code login (`ANTHROPIC_API_KEY` is removed from its environment). */
+  codeAuth: 'local_login' | 'api_key'
 }
 
 export const SETTING_DEFAULTS: AppSettings = {
@@ -34,6 +41,8 @@ export const SETTING_DEFAULTS: AppSettings = {
   baselineRuns: 3,
   ablationTemperature: 0.2,
   accentColor: null,
+  mode: 'api',
+  codeAuth: 'local_login',
 }
 
 const updateSettingsSchema = z.object(settingsFields).partial().strict()
@@ -75,4 +84,11 @@ export function settingsRoutes(db: DatabaseSync): Hono {
   routes.get('/settings', (c) => c.json(repo.get()))
   routes.put('/settings', async (c) => c.json(repo.update(await parseBody(c, updateSettingsSchema))))
   return routes
+}
+
+/** Guard for features that only exist in one mode: `409 feature_requires_api_mode` / `feature_requires_claude_code_mode`. */
+export function requireMode(db: DatabaseSync, mode: AppSettings['mode']): void {
+  if (createSettingsRepository(db).get().mode === mode) return
+  if (mode === 'api') throw new AppError(409, 'feature_requires_api_mode', 'Only available in API mode.')
+  throw new AppError(409, 'feature_requires_claude_code_mode', 'Only available in Claude Code mode.')
 }

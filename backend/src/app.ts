@@ -3,6 +3,7 @@ import { Hono } from 'hono'
 import type { DatabaseSync } from 'node:sqlite'
 import { originGuard, type OriginGuardOptions } from './auth/index.ts'
 import { ablationRoutes, createTransformersEmbedder, embeddingCacheDir, type Embedder } from './ablation/index.ts'
+import { agentRoutes, createSdkRunner, type AgentRunner } from './agent/index.ts'
 import { cardRoutes } from './card/routes.ts'
 import { chatRoutes } from './chat/routes.ts'
 import { handleError, handleNotFound } from './common/errors.ts'
@@ -18,6 +19,8 @@ export type Dependencies = {
   /** Embedding model for the ablation. Default: local Transformers.js model, loaded on first use. Tests pass a fake. */
   embedder?: Embedder
   security?: OriginGuardOptions
+  /** Coding agent for Claude Code mode. Default: the real one through the Claude Agent SDK. Tests and end-to-end tests pass the fake. */
+  agentRunner?: AgentRunner
   /** Folder with the built frontend (`frontend/dist`). If set, it is served at `/` with an `index.html` fallback for client-side routes. */
   frontendDist?: string
   /** Folder for the embedding model. Default: `EMBEDDING_CACHE_DIR` from the environment, else next to the database file. */
@@ -34,6 +37,7 @@ export function createApp(deps: Dependencies): Hono {
   const embedder = deps.embedder ?? createTransformersEmbedder({ cacheDir: deps.embeddingCacheDir ?? embeddingCacheDir(deps.db) })
   api.route('/', ablationRoutes(deps.db, deps.llm, embedder))
   api.route('/', rulesRoutes(deps.db, deps.llm))
+  api.route('/', agentRoutes(deps.db, deps.agentRunner ?? createSdkRunner()))
 
   const app = new Hono()
   if (deps.security) app.use('*', originGuard(deps.security))

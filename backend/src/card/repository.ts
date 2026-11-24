@@ -9,6 +9,7 @@ import type {
   GraphNode,
   Link,
   LinkKind,
+  ReviewStatus,
 } from './schema.ts'
 
 type Row = Record<string, unknown>
@@ -42,6 +43,8 @@ function toBase(row: Row): Omit<CardSummary, 'excerpt'> {
     archivedAt: row.archived_at as string | null,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
+    origin: row.origin as 'agent' | null,
+    reviewStatus: row.review_status as ReviewStatus | null,
   }
 }
 
@@ -56,9 +59,11 @@ export type NewCard = {
   /** Only set for uploaded files. */
   sourceName?: string
   mimeType?: string
+  /** Only set for cards recorded by a Claude Code session. */
+  agent?: { sessionId: number; reviewStatus: ReviewStatus }
 }
 
-export type CardChanges = Partial<NewCard> & { ifVersion?: number }
+export type CardChanges = Partial<Omit<NewCard, 'agent'>> & { ifVersion?: number }
 
 export type CardFilter = {
   query?: string
@@ -124,7 +129,7 @@ export function createCardRepository(db: DatabaseSync) {
       return transaction(db, () => {
         const result = db
           .prepare(
-            'INSERT INTO cards (title, body, kind, folder_path, default_included, source_name, mime_type) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            'INSERT INTO cards (title, body, kind, folder_path, default_included, source_name, mime_type, origin, review_status, code_session_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
           )
           .run(
             input.title,
@@ -134,6 +139,9 @@ export function createCardRepository(db: DatabaseSync) {
             input.defaultIncluded ? 1 : 0,
             input.sourceName ?? null,
             input.mimeType ?? null,
+            input.agent ? 'agent' : null,
+            input.agent?.reviewStatus ?? null,
+            input.agent?.sessionId ?? null,
           )
         const id = Number(result.lastInsertRowid)
         db.prepare('INSERT INTO card_versions (card_id, version, title, body) VALUES (?, 1, ?, ?)').run(
@@ -308,6 +316,8 @@ export function createCardRepository(db: DatabaseSync) {
         x: c.graph_x as number | null,
         y: c.graph_y as number | null,
         degree: degree.get(c.id as number) ?? 0,
+        origin: c.origin as 'agent' | null,
+        reviewStatus: c.review_status as ReviewStatus | null,
       }))
       return { nodes, links }
     },

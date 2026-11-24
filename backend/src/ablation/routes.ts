@@ -4,6 +4,7 @@ import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
 import { AppError, errorBody } from '../common/errors.ts'
 import { idSchema, parse, parseBody } from '../common/validation.ts'
+import { requireMode } from '../settings/index.ts'
 import type { LlmClient } from '../llm/index.ts'
 import type { Embedder } from './embedding.ts'
 import { createAblationService } from './service.ts'
@@ -25,6 +26,7 @@ export function ablationRoutes(db: DatabaseSync, llm: LlmClient | undefined, emb
   routes.post('/messages/:id/ablations', async (c) => {
     const messageId = parse(idSchema, c.req.param('id'))
     const { dryRun, ...request } = await parseBody(c, ablationSchema)
+    if (!dryRun) requireMode(db, 'api')
     const plan = service.prepare(messageId, request)
     if (dryRun) return c.json(service.publicPlan(plan))
 

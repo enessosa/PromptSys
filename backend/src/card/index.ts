@@ -2,4 +2,4 @@
 export { cardRoutes } from './routes.ts'
 export { createCardRepository } from './repository.ts'
 export { createMergeRepository } from './merge.ts'
-export type { Card, Merge, MergePreview, CardSummary, CardVersion, GraphNode, Link } from './schema.ts'
+export type { Card, ReviewStatus, Merge, MergePreview, CardSummary, CardVersion, GraphNode, Link } from './schema.ts'

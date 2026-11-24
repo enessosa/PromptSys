@@ -182,8 +182,8 @@ describe('graph', () => {
     await send('DELETE', '/cards/3')
     const graph = (await send('GET', '/graph')).body
     expect(graph.nodes).toEqual([
-      { id: 1, title: 'a', kind: 'note', folderPath: '', x: null, y: null, degree: 1 },
-      { id: 2, title: 'b', kind: 'memory', folderPath: '', x: null, y: null, degree: 1 },
+      { id: 1, title: 'a', kind: 'note', folderPath: '', x: null, y: null, degree: 1, origin: null, reviewStatus: null },
+      { id: 2, title: 'b', kind: 'memory', folderPath: '', x: null, y: null, degree: 1, origin: null, reviewStatus: null },
     ])
     expect(graph.links).toHaveLength(1)
     expect((await send('GET', '/graph?kind=memory')).body).toMatchObject({ nodes: [{ id: 2, degree: 0 }], links: [] })

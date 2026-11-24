@@ -10,11 +10,11 @@ const call = async (app: ReturnType<typeof createTestApp>['app'], method: string
 describe('settings', () => {
   it('returns defaults, merges partial updates and keeps them', async () => {
     const { app } = createTestApp()
-    expect((await call(app, 'GET')).body).toEqual({ defaultModel: null, ablationRuns: 3, baselineRuns: 3, ablationTemperature: 0.2, accentColor: null })
+    expect((await call(app, 'GET')).body).toEqual({ defaultModel: null, ablationRuns: 3, baselineRuns: 3, ablationTemperature: 0.2, accentColor: null, mode: 'api', codeAuth: 'local_login' })
     const put = await call(app, 'PUT', { ablationRuns: 5, accentColor: '#7c5cff', defaultModel: 'claude-x' })
     expect(put.status).toBe(200)
     expect(put.body).toMatchObject({ ablationRuns: 5, baselineRuns: 3, accentColor: '#7c5cff', defaultModel: 'claude-x' })
-    expect((await call(app, 'PUT', { accentColor: null })).body.accentColor).toBeNull()
+    expect((await call(app, 'PUT', { accentColor: null, mode: 'api', codeAuth: 'local_login' })).body.accentColor).toBeNull()
     expect((await call(app, 'GET')).body).toMatchObject({ ablationRuns: 5, defaultModel: 'claude-x' })
   })
 
