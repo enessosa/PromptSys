@@ -299,7 +299,7 @@ export type Settings = {
 export type AppMode = 'api' | 'claude_code'
 export type CodeAuth = 'local_login' | 'api_key'
 
-// --- Claude Code mode ---
+// --- Agent mode ---
 
 export type CodeSessionStatus = 'idle' | 'running' | 'waiting_approval' | 'error' | 'stopped'
 

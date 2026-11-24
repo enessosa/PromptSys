@@ -66,7 +66,7 @@ Folders are organized by feature, not by layer: each folder holds its own routes
 | `src/citation` | Parsing of citation markers like `[c3]`: streaming state machine and final re-parse |
 | `src/ablation` | Similarity ablation: `embedding.ts` (embedder), `score.ts` (cosine, noise, labels), `service.ts`, `routes.ts` |
 | `src/rules` | Derived rules: tool-use extraction (`service.ts`), `repository.ts`, `routes.ts`, `schema.ts` |
-| `src/agent` | Claude Code mode: `runner.ts` (interface `AgentRunner`, `AgentEvent`), `sdk.ts` (real runner on `@anthropic-ai/claude-agent-sdk`, pure `mapSdkMessage` and `preToolUseDecision`), `fake.ts` (deterministic runner), `service.ts` (sessions, event log, approvals, binding), `routes.ts` |
+| `src/agent` | Agent mode: `runner.ts` (interface `AgentRunner`, `AgentEvent`), `sdk.ts` (real runner on `@anthropic-ai/claude-agent-sdk`, pure `mapSdkMessage` and `preToolUseDecision`), `fake.ts` (deterministic runner), `service.ts` (sessions, event log, approvals, binding), `routes.ts` |
 | `src/settings` | Non-secret settings in the `settings` table, `GET/PUT /api/settings` |
 | `src/llm` | Claude API access (`complete`, `callTool` for forced tool calls, `stream`), optional `temperature`, API key check, mapping of SDK errors to `llm_*` error codes |
 | `src/db` | SQLite connection (`openDatabase`), migration runner (`migrate`) and `transaction` helper |
@@ -205,7 +205,7 @@ Settings, ablation and rules endpoints are listed in [Settings](#settings), [Abl
 | `mode` | `api` or `claude_code` | `api` |
 | `codeAuth` | `local_login` or `api_key` | `local_login` |
 
-## Claude Code mode (`src/agent`)
+## Agent mode (`src/agent`)
 
 A second mode (`mode = claude_code`) shares the card library and the graph. The main view is a coding-agent session that runs through `@anthropic-ai/claude-agent-sdk` with the user's own local Claude Code login (PromptSys never sees or stores the login). With `codeAuth = local_login` the environment given to the SDK has `ANTHROPIC_API_KEY` removed; `api_key` passes it through. Migration `0005_code_mode.sql` adds `code_sessions`, `code_events` and the card columns `origin` (`agent` or `NULL` for user cards), `review_status` (`proposed`, `confirmed`, `corrected`, `rejected`) and `code_session_id`. At startup, sessions left in `running` or `waiting_approval` are set to `stopped`.
 

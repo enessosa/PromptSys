@@ -4,7 +4,7 @@ import styles from './code.module.css'
 
 const OPTIONS: { value: AppMode; label: string }[] = [
   { value: 'api', label: 'API' },
-  { value: 'claude_code', label: 'Claude Code' },
+  { value: 'claude_code', label: 'Agent' },
 ]
 
 /** Segmented control for the working mode (sidebar header and settings). */

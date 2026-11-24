@@ -28,7 +28,7 @@ const reviewSchema = z
   .strict()
   .refine((v) => Object.keys(v).length > 0, 'At least one field is required')
 
-/** Claude Code sessions (mounted under `/api`). All routes except `/code/status` need the setting `mode = claude_code`. */
+/** Agent sessions (mounted under `/api`). All routes except `/code/status` need the setting `mode = claude_code`. */
 export function agentRoutes(db: DatabaseSync, runner: AgentRunner, service: AgentService = createAgentService(db, runner)): Hono {
   const settings = createSettingsRepository(db)
   const routes = new Hono()

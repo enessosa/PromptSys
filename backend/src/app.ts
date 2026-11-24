@@ -19,7 +19,7 @@ export type Dependencies = {
   /** Embedding model for the ablation. Default: local Transformers.js model, loaded on first use. Tests pass a fake. */
   embedder?: Embedder
   security?: OriginGuardOptions
-  /** Coding agent for Claude Code mode. Default: the real one through the Claude Agent SDK. Tests and end-to-end tests pass the fake. */
+  /** Coding agent for Agent mode. Default: the real one through the Claude Agent SDK. Tests and end-to-end tests pass the fake. */
   agentRunner?: AgentRunner
   /** Folder with the built frontend (`frontend/dist`). If set, it is served at `/` with an `index.html` fallback for client-side routes. */
   frontendDist?: string

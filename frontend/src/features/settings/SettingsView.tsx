@@ -51,7 +51,7 @@ function SettingsForm({ saved }: { saved: Settings }) {
       <section>
         <h3>Mode</h3>
         <ModeSwitch />
-        <p className={styles.muted}>API: you control exactly what is sent. Claude Code: coding-agent sessions; ablation, automatic replay and automatic rule extraction are locked.</p>
+        <p className={styles.muted}>API: you control exactly what is sent. Agent: coding-agent sessions that run your installed Claude Code; ablation, automatic replay and automatic rule extraction are locked.</p>
         <FormControl>
           <FormControl.Label>Claude Code login</FormControl.Label>
           <Select

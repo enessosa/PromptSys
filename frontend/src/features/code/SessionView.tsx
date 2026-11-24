@@ -21,8 +21,8 @@ export function CodeSessionView({ sessionId }: { sessionId: number }) {
 
   if (detail.error instanceof ApiError && detail.error.code === 'feature_requires_claude_code_mode') {
     return (
-      <EmptyState title="Claude Code mode is off">
-        Sessions need the Claude Code mode.
+      <EmptyState title="Agent mode is off">
+        Sessions need the Agent mode.
         <ModeSwitch />
       </EmptyState>
     )

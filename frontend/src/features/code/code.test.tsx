@@ -29,11 +29,11 @@ describe('mode switch', () => {
     })
     const user = userEvent.setup()
     renderWithProviders(<ModeSwitch />)
-    const code = await screen.findByRole('radio', { name: 'Claude Code' })
+    const code = await screen.findByRole('radio', { name: 'Agent' })
     expect(screen.getByRole('radio', { name: 'API' })).toHaveAttribute('aria-checked', 'true')
     await user.click(code)
     await waitFor(() => expect(calls.find((c) => c.key === 'PUT /api/settings')?.body).toEqual({ mode: 'claude_code' }))
-    await waitFor(() => expect(screen.getByRole('radio', { name: 'Claude Code' })).toHaveAttribute('aria-checked', 'true'))
+    await waitFor(() => expect(screen.getByRole('radio', { name: 'Agent' })).toHaveAttribute('aria-checked', 'true'))
   })
 })
 
@@ -458,13 +458,13 @@ describe('session view', () => {
       'GET /api/code/sessions/1': { status: 409, body: { error: { code: 'feature_requires_claude_code_mode', message: 'x' } } },
     })
     renderWithProviders(<CodeSessionView sessionId={1} />)
-    expect(await screen.findByText('Claude Code mode is off')).toBeInTheDocument()
+    expect(await screen.findByText('Agent mode is off')).toBeInTheDocument()
   })
 })
 
 describe('API-only controls', () => {
   const chip = <CitationChip marker="[c1]" cardId={1} onWhy={() => undefined} />
-  it('disables Why? in Claude Code mode with a tooltip', async () => {
+  it('disables Why? in Agent mode with a tooltip', async () => {
     mockFetch({ 'GET /api/settings': { body: { ...baseSettings, mode: 'claude_code' } }, 'GET /api/cards/1': { status: 404, body: { error: { code: 'not_found', message: 'x' } } } })
     renderWithProviders(chip)
     await waitFor(() => expect(screen.getByRole('button', { name: 'Why [c1]?' })).toBeDisabled())

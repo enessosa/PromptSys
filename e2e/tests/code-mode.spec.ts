@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
 import { uniqueTitle } from './helpers.ts'
 
-const mode = (page: Page, name: 'API' | 'Claude Code') => page.getByTestId('sidebar').getByRole('radiogroup', { name: 'Mode' }).getByRole('radio', { name })
+const mode = (page: Page, name: 'API' | 'Agent') => page.getByTestId('sidebar').getByRole('radiogroup', { name: 'Mode' }).getByRole('radio', { name })
 
 async function createSession(page: Page, folder: string, title: string) {
   await page.getByRole('button', { name: 'New session' }).click()
@@ -21,8 +21,8 @@ test('claude code mode: session, echo, card, approval, review, second session, b
   const second = uniqueTitle('Code B')
   try {
     await page.goto('/')
-    await mode(page, 'Claude Code').click()
-    await expect(mode(page, 'Claude Code')).toBeChecked()
+    await mode(page, 'Agent').click()
+    await expect(mode(page, 'Agent')).toBeChecked()
 
     await createSession(page, folder, first)
     const box = page.getByRole('textbox', { name: 'Message' })

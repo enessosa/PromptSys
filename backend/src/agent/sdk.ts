@@ -78,7 +78,8 @@ export function preToolUseDecision(toolName: string, toolInput?: unknown, cwd?: 
 /**
  * The user's own installed `claude`. The SDK's bundled copy does not see the login of the installed one (on macOS the login sits
  * in the keychain, bound to that binary), so the installed one is preferred: `PROMPTSYS_CLAUDE_PATH`, then `PATH`, then the usual
- * install folders (an app started from the Finder has a minimal `PATH`). `undefined` = fall back to the bundled copy.
+ * install folders (an app started from the Finder has a minimal `PATH`). `undefined` = not installed: PromptSys does not ship
+ * Claude Code, the user installs it and signs in with it.
  */
 export function findClaudeExecutable(
   env: Record<string, string | undefined> = process.env,
@@ -95,6 +96,15 @@ export function findClaudeExecutable(
     '/usr/local/bin/claude',
   ]
   return candidates.find((path): path is string => path !== undefined && path !== '' && exists(path))
+}
+
+export const CLAUDE_NOT_INSTALLED =
+  'Claude Code is not installed. Install it (https://code.claude.com/docs/en/setup), run `claude` once to sign in, then restart PromptSys.'
+
+function requireClaude(env: Record<string, string | undefined>): string {
+  const path = findClaudeExecutable(env)
+  if (!path) throw new Error(CLAUDE_NOT_INSTALLED)
+  return path
 }
 
 /** The `systemMessage` of a hook's JSON output (what Claude Code shows the user), or null for plain or other output. */
@@ -245,8 +255,9 @@ function cardServer(cardTools: CardTools) {
 export function createSdkRunner(): AgentRunner {
   return {
     async available() {
-      // The SDK starts the user's own `claude` (bundled or installed); here we only check that the package is usable.
-      return typeof query === 'function' ? { ok: true } : { ok: false, reason: 'The Claude Agent SDK could not be loaded.' }
+      // The SDK starts the user's own installed `claude`; it is not shipped with PromptSys.
+      if (typeof query !== 'function') return { ok: false, reason: 'The Claude Agent SDK could not be loaded.' }
+      return findClaudeExecutable() ? { ok: true } : { ok: false, reason: CLAUDE_NOT_INSTALLED }
     },
     async probe({ cwd, env }) {
       // Start Claude Code with an input stream that never sends a prompt: no request, no usage. SessionStart hooks run at
@@ -257,10 +268,10 @@ export function createSdkRunner(): AgentRunner {
           next: () => new Promise<IteratorResult<never>>((resolve) => controller.signal.addEventListener('abort', () => resolve({ done: true, value: undefined }), { once: true })),
         }),
       }
-      const claudePath = findClaudeExecutable(env)
+      const claudePath = requireClaude(env)
       const run = query({
         prompt: idle,
-        options: { cwd, env, abortController: controller, settingSources: ['user', 'project'], ...(claudePath ? { pathToClaudeCodeExecutable: claudePath } : {}) },
+        options: { cwd, env, abortController: controller, settingSources: ['user', 'project'], pathToClaudeCodeExecutable: claudePath },
       })
       const notices: string[] = []
       // Keep reading until the probe ends: leaving the loop early would close the query before the commands arrive.
@@ -311,14 +322,14 @@ export function createSdkRunner(): AgentRunner {
         const answer = await ask(toolName, toolInput)
         return answer.allow ? { behavior: 'allow', updatedInput: toolInput } : { behavior: 'deny', message: answer.message ?? 'The user denied this tool call.' }
       }
-      const claudePath = findClaudeExecutable(input.env)
+      const claudePath = requireClaude(input.env)
       const run = query({
         prompt: input.prompt,
         options: {
           cwd: input.cwd,
           ...(input.resume ? { resume: input.resume } : {}),
           env: input.env,
-          ...(claudePath ? { pathToClaudeCodeExecutable: claudePath } : {}),
+          pathToClaudeCodeExecutable: claudePath,
           settingSources: ['user', 'project'],
           systemPrompt: { type: 'preset', preset: 'claude_code', append: CARD_INSTRUCTIONS },
           mcpServers: { [MCP_SERVER]: cardServer(input.cardTools) },

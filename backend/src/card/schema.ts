@@ -86,7 +86,7 @@ export type CardSummary = {
   archivedAt: string | null
   createdAt: string
   updatedAt: string
-  /** `'agent'` for cards recorded by a Claude Code session, `null` for user cards. */
+  /** `'agent'` for cards recorded by an agent session, `null` for user cards. */
   origin: 'agent' | null
   reviewStatus: ReviewStatus | null
 }

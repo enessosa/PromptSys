@@ -13,7 +13,7 @@ import { PlanUsageLine } from './PlanUsageLine.tsx'
 import { STATUS_LABEL } from './model.ts'
 import styles from './code.module.css'
 
-/** Sidebar section of the Claude Code mode. */
+/** Sidebar section of the Agent mode. */
 export function SessionList() {
   const { data, isError, error } = useCodeSessions()
   const list = data ?? []

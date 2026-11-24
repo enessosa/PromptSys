@@ -90,5 +90,5 @@ export function settingsRoutes(db: DatabaseSync): Hono {
 export function requireMode(db: DatabaseSync, mode: AppSettings['mode']): void {
   if (createSettingsRepository(db).get().mode === mode) return
   if (mode === 'api') throw new AppError(409, 'feature_requires_api_mode', 'Only available in API mode.')
-  throw new AppError(409, 'feature_requires_claude_code_mode', 'Only available in Claude Code mode.')
+  throw new AppError(409, 'feature_requires_claude_code_mode', 'Only available in Agent mode.')
 }

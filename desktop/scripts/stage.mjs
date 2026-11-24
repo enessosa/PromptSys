@@ -31,6 +31,13 @@ cpSync(join(repo, 'frontend', 'dist'), join(stage, 'frontend'), { recursive: tru
 // Production dependencies only (no Anthropic key, no dev tools).
 run(backend, ['ci', '--omit=dev', '--no-audit', '--no-fund'])
 
+// The Agent SDK pulls in the Claude Code binary for this OS (several hundred MB) as an optional package. PromptSys does not ship
+// Claude Code: users install it themselves and the backend starts their installed `claude`.
+const scoped = join(backend, 'node_modules', '@anthropic-ai')
+if (existsSync(scoped)) {
+  for (const name of readdirSync(scoped)) if (name.startsWith('claude-agent-sdk-')) rmSync(join(scoped, name), { recursive: true, force: true })
+}
+
 // onnxruntime-node ships binaries for every OS/arch (several hundred MB); keep only the one we run on.
 const bin = join(backend, 'node_modules', 'onnxruntime-node', 'bin')
 const platform = process.env.TARGET_PLATFORM ?? process.platform

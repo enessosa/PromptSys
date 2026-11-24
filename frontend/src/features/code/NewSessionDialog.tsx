@@ -65,7 +65,7 @@ export function NewSessionDialog({ onClose, onCreated }: { onClose: () => void; 
           <FormControl.Label>Title</FormControl.Label>
           <TextInput block placeholder="Empty = folder name" value={title} onChange={(e) => setTitle(e.target.value)} />
         </FormControl>
-        <p className={styles.note}>Uses your local Claude Code login. Use at your own responsibility; PromptSys never sees your login.</p>
+        <p className={styles.note}>Agent mode runs your own installed Claude Code with your own login and plan; your use is subject to Anthropic's terms. PromptSys never sees your login.</p>
         {error && <p role="alert" className={styles.error}>{error}</p>}
       </form>
     </Dialog>
