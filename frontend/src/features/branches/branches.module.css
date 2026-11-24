@@ -96,20 +96,29 @@
   text-transform: uppercase;
 }
 
-.branchLabel {
+.branchLabels {
   position: absolute;
-  top: 100%;
-  left: 12px;
   z-index: 2;
-  max-width: 190px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
   overflow: hidden;
+  pointer-events: none;
+}
+
+.branchLabel {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   padding: 0 6px;
   border-radius: 8px;
   background: var(--ps-accent-muted);
   color: var(--ps-accent);
   font-size: 10.5px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
 .handle {

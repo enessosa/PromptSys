@@ -18,11 +18,18 @@ export function MessageNode({ data }: NodeProps<MessageFlowNode>) {
         <span className={styles.nodeRole}>{n.role === 'user' ? 'You' : 'Model'}</span>
         {n.excerpt || '(empty)'}
       </span>
-      {n.labels.map((l) => (
-        <span key={l} className={styles.branchLabel}>
-          {l}
-        </span>
-      ))}
+      {n.labelBox && (
+        <div
+          className={styles.branchLabels}
+          style={{ left: n.labelBox.x - n.x, top: n.labelBox.y - n.y, width: n.labelBox.width, height: n.labelBox.height }}
+        >
+          {n.labels.map((l) => (
+            <span key={l} className={styles.branchLabel} title={l}>
+              {l}
+            </span>
+          ))}
+        </div>
+      )}
       <Handle type="source" position={Position.Bottom} className={styles.handle} />
     </div>
   )

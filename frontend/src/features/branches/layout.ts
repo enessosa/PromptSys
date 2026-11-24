@@ -1,12 +1,18 @@
 import type { ConversationTree } from '../../api/types.ts'
 
-export const LANE_WIDTH = 240
+export const NODE_WIDTH = 200
+export const NODE_HEIGHT = 40
+/** Wide lanes leave a gap right of each node for branch labels (they never sit on a connector). */
+export const LANE_WIDTH = 400
 export const ROW_HEIGHT = 64
+export const LABEL_GAP = 8
 export const HEADER_HEIGHT = 56
 
 type TreeMessage = ConversationTree['messages'][number]
 
 export type Lane = { timelineId: number; index: number; x: number; name: string; changeSummary: string | null; replayStatus: string | null; parentTimelineId: number | null }
+
+export type Box = { x: number; y: number; width: number; height: number }
 
 export type LaneNode = {
   id: string
@@ -23,6 +29,11 @@ export type LaneNode = {
   replay: boolean
   /** Branch labels of the timelines that fork off after this message ("name: change summary"). */
   labels: string[]
+  /**
+   * Where the branch labels are drawn (absolute coordinates): in the gap to the right of the node, level with it,
+   * so the vertical connector (below the node) and the dashed fork edge (between the rows) stay clear. Null without labels.
+   */
+  labelBox: Box | null
 }
 
 export type LaneEdge = { id: string; source: string; target: string; crossLane: boolean }
@@ -77,6 +88,7 @@ export function layoutBranches(tree: ConversationTree): BranchLayout {
   const nodes: LaneNode[] = tree.messages.map((m) => {
     const owner = m.timelineIds.map((id) => laneOf.get(id)).filter((i): i is number => i !== undefined).sort((a, b) => a - b)[0] ?? 0
     const d = depth(m)
+    const nodeLabels = labels.get(m.id) ?? []
     return {
       id: `m${m.id}`,
       messageId: m.id,
@@ -89,7 +101,16 @@ export function layoutBranches(tree: ConversationTree): BranchLayout {
       status: m.status,
       excerpt: m.excerpt,
       replay: m.replayOfId != null,
-      labels: labels.get(m.id) ?? [],
+      labels: nodeLabels,
+      labelBox:
+        nodeLabels.length === 0
+          ? null
+          : {
+              x: owner * LANE_WIDTH + NODE_WIDTH + LABEL_GAP,
+              y: d * ROW_HEIGHT,
+              width: LANE_WIDTH - NODE_WIDTH - 2 * LABEL_GAP,
+              height: NODE_HEIGHT,
+            },
     }
   })
 

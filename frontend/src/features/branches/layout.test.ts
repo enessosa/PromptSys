@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ConversationTree } from '../../api/types.ts'
-import { LANE_WIDTH, layoutBranches, ROW_HEIGHT } from './layout.ts'
+import { LANE_WIDTH, layoutBranches, NODE_HEIGHT, NODE_WIDTH, ROW_HEIGHT } from './layout.ts'
 
 const tl = (id: number, name: string, over: Partial<ConversationTree['timelines'][number]> = {}) => ({
   id, conversationId: 1, name, parentTimelineId: null, branchPointId: null, headMessageId: null, changeSummary: null, createdAt: '', ...over,
@@ -48,6 +48,28 @@ describe('layoutBranches', () => {
     expect(node(2).labels).toEqual(['b: excluded c2'])
     expect(node(5).replay).toBe(true)
     expect(node(3).replay).toBe(false)
+  })
+
+  it('puts the branch label beside the node, clear of connectors and the dashed fork edge', () => {
+    const n = node(2)
+    const box = n.labelBox!
+    expect(box).not.toBeNull()
+    expect(node(3).labelBox).toBeNull()
+    // right of the node, inside its own lane gap
+    expect(box.x).toBeGreaterThanOrEqual(n.x + NODE_WIDTH)
+    expect(box.x + box.width).toBeLessThanOrEqual(n.x + LANE_WIDTH)
+    // vertical connector of the lane (node centre) and the next lane's connector are not inside the box
+    for (const cx of [n.x + NODE_WIDTH / 2, node(5).x + NODE_WIDTH / 2]) {
+      expect(cx < box.x || cx > box.x + box.width).toBe(true)
+    }
+    // the fork edge runs horizontally between the rows, below the node: the label stays above it
+    const forkRunY = n.y + NODE_HEIGHT + (ROW_HEIGHT - NODE_HEIGHT) / 2
+    expect(box.y + box.height).toBeLessThan(forkRunY)
+    // no node box (other than the owner) overlaps the label
+    for (const o of layout.nodes.filter((o) => o !== n)) {
+      const overlap = box.x < o.x + NODE_WIDTH && box.x + box.width > o.x && box.y < o.y + NODE_HEIGHT && box.y + box.height > o.y
+      expect(overlap).toBe(false)
+    }
   })
 
   it('marks edges that cross lanes (the fork)', () => {
