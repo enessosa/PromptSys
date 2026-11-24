@@ -1,0 +1,96 @@
+.panel {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--ps-border);
+  border-radius: 8px;
+  background: var(--ps-bg-sidebar);
+}
+
+.panel h4 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.panel ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.claimed {
+  margin-left: 6px;
+  color: var(--ps-text-muted);
+  font-weight: 400;
+  font-style: italic;
+}
+
+.muted {
+  margin: 0;
+  color: var(--ps-text-muted);
+  font-size: 12px;
+}
+
+.warning {
+  margin: 0 0 6px;
+  color: var(--ps-danger);
+  font-size: 12px;
+}
+
+.rule {
+  padding: 6px 0;
+  border-top: 1px solid var(--ps-border);
+}
+
+.rule:first-child {
+  border-top: 0;
+}
+
+.rule[data-status='rejected'] .text {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
+.rule textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid var(--ps-border);
+  border-radius: 6px;
+  background: var(--ps-bg-main);
+  color: var(--ps-text);
+  font: inherit;
+  resize: vertical;
+}
+
+.text {
+  margin: 0;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 2px 0 4px;
+  color: var(--ps-text-muted);
+  font-size: 12px;
+}
+
+.status {
+  font-style: italic;
+}
+
+.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ps-accent);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
