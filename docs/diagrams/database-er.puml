@@ -1,5 +1,5 @@
 @startuml database-er
-title Database schema (migrations 0001-0004)
+title Database schema (migrations 0001-0006)
 hide circle
 
 entity cards {
@@ -10,6 +10,8 @@ entity cards {
   version, archived_at
   forked_from_id <<FK>>
   merged_into_id <<FK>>
+  origin, review_status
+  code_session_id <<FK>>
 }
 entity card_versions {
   * card_id <<PK,FK>>
@@ -97,6 +99,20 @@ entity ablation_runs {
   run_index, answer
   similarity, temperature
 }
+entity code_sessions {
+  * id <<PK>>
+  --
+  title, project_path
+  sdk_session_id
+  status, permission_mode
+  slash_commands
+}
+entity code_events {
+  * id <<PK>>
+  --
+  session_id <<FK>>
+  seq, type, payload
+}
 entity settings {
   * key <<PK>>
   --
@@ -116,6 +132,8 @@ messages ||--o{ derived_rules
 timelines ||--o{ timeline_context
 card_versions ||--o{ message_cards
 card_versions ||--o{ timeline_context
+code_sessions ||--o{ code_events
+code_sessions |o--o{ cards
 cards |o--o{ citations
 cards |o--o{ ablation_runs
 messages |o--o{ messages : parent_id

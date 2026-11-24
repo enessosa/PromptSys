@@ -16,6 +16,8 @@ package "backend/src" {
   }
   package llm {
   }
+  package agent {
+  }
   package ablation {
   }
   package rules {
@@ -33,6 +35,7 @@ package "backend/src" {
 createApp --> card : cardRoutes
 createApp --> chat : chatRoutes
 createApp --> ablation : ablationRoutes
+createApp --> agent : agentRoutes
 createApp --> rules : rulesRoutes
 createApp --> settings : settingsRoutes
 createApp --> auth : originGuard
@@ -40,10 +43,13 @@ createApp --> auth : originGuard
 chat --> assembly : assemblePrompt
 chat --> citation : parser
 chat --> llm : LlmClient
+chat --> settings : requireMode
 ablation --> chat : repository
 ablation --> assembly
 ablation --> settings
 ablation --> llm
+agent --> card : repository
+agent --> settings : requireMode
 rules --> card : repository
 rules --> chat : repository
 rules --> assembly
@@ -53,8 +59,9 @@ assembly --> llm : LlmMessage
 llm ..> ablation : fake Embedder
 
 note bottom of common
-  card, chat, assembly, ablation, rules, auth, llm
+  card, chat, assembly, ablation, rules, agent, auth, llm
   and settings also import common (errors, validation).
   card, chat, rules, ablation use db (transaction).
+  agent talks to the Claude Agent SDK instead of llm.
 end note
 @enduml

@@ -20,6 +20,7 @@ S --> R : plan
 R --> FE : estimatedApiCalls
 User -> FE : confirm
 FE -> R : POST /messages/:id/ablations
+R -> R : requireMode(api)
 R -> S : prepare(), then execute(plan, hooks)
 S -> E : embed(original)
 loop baseline runs, then each card

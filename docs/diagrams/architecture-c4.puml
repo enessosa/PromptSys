@@ -7,13 +7,14 @@ Person(user, "User", "Manages knowledge cards and chats with context")
 
 System_Boundary(desk, "PromptSys desktop app") {
   Container(shell, "Electron shell", "Electron, TypeScript", "Main process: windows, keystore (safeStorage), starts the backend")
-  Container(spa, "Frontend", "React, Vite", "Cards, graph, chat, branches, Why dialog, settings")
-  Container(api, "Backend", "Node.js, Hono", "REST + SSE under /api, serves the built frontend")
-  ContainerDb(db, "SQLite", "node:sqlite", "Cards, conversations, ablation runs")
+  Container(spa, "Frontend", "React, Vite", "Cards, graph, chat, branches, Why dialog, Agent mode (code sessions), settings")
+  Container(api, "Backend", "Node.js, Hono", "REST + SSE under /api (chat, ablation, /api/code agent sessions), serves the built frontend")
+  ContainerDb(db, "SQLite", "node:sqlite", "Cards, conversations, ablation runs, agent sessions and events")
   Container(emb, "Embedding model", "Transformers.js, MiniLM", "Local sentence embeddings, loaded on first use")
 }
 
-System_Ext(claude, "Claude API", "Answers and ablation runs")
+System_Ext(cli, "Claude Code CLI", "claude, installed by the user; not shipped, started by the backend through the Agent SDK")
+System_Ext(claude, "Claude API", "Answers, ablation runs and agent turns")
 
 Rel_D(user, spa, "Uses")
 Rel_R(shell, api, "Starts as utilityProcess")
@@ -21,7 +22,9 @@ Rel_D(shell, spa, "Loads in window")
 Rel_D(spa, api, "HTTP, SSE", "127.0.0.1")
 Rel_D(api, db, "SQL")
 Rel_R(api, emb, "embed()")
-Rel_R(api, claude, "HTTPS")
+Rel_R(api, claude, "HTTPS (API mode)")
+Rel_D(api, cli, "Spawns (Agent mode)")
+Rel_R(cli, claude, "HTTPS, own login")
 
 SHOW_LEGEND()
 @enduml

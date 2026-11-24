@@ -1,0 +1,50 @@
+@startuml agent-turn-sequence
+title Agent mode - one turn with approval and record_card
+autonumber
+hide footbox
+
+actor User
+participant "Frontend\n(features/code)" as FE
+participant "agentRoutes\n(/api/code/*)" as R
+participant "AgentService" as S
+participant "SdkRunner\n(sdk.ts)" as RUN
+participant "claude CLI\n(user-installed)" as CLI
+database SQLite
+
+FE -> R : GET /sessions/:id/stream (SSE)
+User -> FE : send message
+FE -> R : POST /sessions/:id/messages
+R -> S : sendMessage(id, text)
+R --> FE : 202 accepted
+S -> S : bindingBlock()\n<promptsys-cards> + prompt
+S -> RUN : runTurn(prompt, cardTools, approve)
+RUN -> CLI : query() via Agent SDK
+loop events of the turn
+  CLI --> RUN : messages
+  RUN --> S : AgentEvent
+  S -> SQLite : INSERT code_events
+  S --> FE : SSE event
+end
+== Tool approval ==
+CLI -> RUN : canUseTool(tool, input)
+RUN -> S : approve()
+S -> SQLite : approval_request event
+S --> FE : SSE approval_request
+User -> FE : allow / deny
+FE -> R : POST /approvals/:approvalId
+R -> S : resolveApproval()
+S --> FE : SSE approval_resolved
+S --> RUN : {allow}
+RUN --> CLI : permission result
+== Recording a card ==
+CLI -> RUN : MCP tool record_card
+RUN -> S : cardTools.recordCard()
+S -> SQLite : INSERT cards\n(origin agent, proposed)
+S --> FE : SSE card (created)
+note over FE, SQLite
+  Proposed cards show only in the session's
+  review list (GET /sessions/:id/cards)
+  until the user confirms, corrects or rejects them.
+end note
+S --> FE : SSE status idle
+@enduml
