@@ -1,14 +1,8 @@
-### Python ###
-.venv/
-__pycache__/
-*.py[cod]
-.pytest_cache/
-.ruff_cache/
-.coverage
-htmlcov/
-build/
+### Node ###
+node_modules/
 dist/
-*.egg-info/
+coverage/
+*.log
 
 ### Secrets ###
 .env
@@ -26,3 +20,11 @@ dist/
 
 ### macOS ###
 .DS_Store
+
+### Database ###
+*.db
+*.db-shm
+*.db-wal
+
+### Local embedding model cache ###
+models/
