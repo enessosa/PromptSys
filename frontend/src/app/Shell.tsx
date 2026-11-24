@@ -26,6 +26,10 @@ import { ConversationList } from '../features/chat/ConversationList.tsx'
 import { useBackendDown, useConversation, useHealth } from '../features/chat/hooks.ts'
 import { Toast } from '../components/Toast.tsx'
 import { WhyHost } from '../features/ablation/WhyDialog.tsx'
+import { CodeSessionView } from '../features/code/SessionView.tsx'
+import { SessionList } from '../features/code/SessionList.tsx'
+import { ModeSwitch } from '../features/code/ModeSwitch.tsx'
+import { useMode } from '../features/code/hooks.ts'
 import { BranchView } from '../features/branches/BranchView.tsx'
 import { ApiKeyButton } from '../features/settings/ApiKeyButton.tsx'
 import { SettingsView } from '../features/settings/SettingsView.tsx'
@@ -47,6 +51,7 @@ export function Shell() {
   useGlobalShortcuts(commands)
   const sidebarOpen = useWorkspace((s) => s.sidebarOpen)
   const inspectorOpen = useWorkspace((s) => s.inspectorOpen)
+  const { claudeCode } = useMode()
   const accent = useSettings().data?.accentColor
   useEffect(() => {
     if (accent !== undefined) applyAccent(accent)
@@ -61,8 +66,9 @@ export function Shell() {
             <>
               <Panel id="sidebar" defaultSize="260px" minSize="180px" maxSize="480px">
                 <aside className={styles.sidebar} aria-label="Sidebar">
+                  <ModeSwitch />
                   <CardTree />
-                  <ConversationList />
+                  {claudeCode ? <SessionList /> : <ConversationList />}
                 </aside>
               </Panel>
               <Separator className={styles.separator} />
@@ -233,6 +239,7 @@ function TabContent({ tab }: { tab: Tab }) {
   if (tab.type === 'graph') return <GraphView />
   if (tab.type === 'branches') return <BranchView conversationId={tab.refId!} />
   if (tab.type === 'settings') return <SettingsView />
+  if (tab.type === 'code') return <CodeSessionView sessionId={tab.refId!} />
   return <ChatView conversationId={tab.refId!} />
 }
 

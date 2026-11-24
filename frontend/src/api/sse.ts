@@ -75,7 +75,16 @@ export async function* streamSse(
   path: string,
   opts: Omit<RequestOptions, 'method'> = {},
 ): AsyncGenerator<SseEvent> {
-  const res = await fetch(path, requestInit({ ...opts, method: 'POST' }))
+  yield* readSse(path, { ...opts, method: 'POST' })
+}
+
+/** GETs a long-lived event stream (e.g. a code session); aborting `signal` closes it. */
+export async function* subscribeSse(path: string, opts: { signal?: AbortSignal } = {}): AsyncGenerator<SseEvent> {
+  yield* readSse(path, { method: 'GET', signal: opts.signal })
+}
+
+async function* readSse(path: string, opts: RequestOptions): AsyncGenerator<SseEvent> {
+  const res = await fetch(path, requestInit(opts))
   if (!res.ok) throw await toApiError(res)
   if (!res.body) return
   const reader = res.body.getReader()

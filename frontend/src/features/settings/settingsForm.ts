@@ -3,6 +3,9 @@ import { isHexColor } from './accent.ts'
 
 export type SettingsForm = { defaultModel: string; ablationRuns: string; baselineRuns: string; ablationTemperature: string; accentColor: string | null }
 
+/** The part of the settings the form saves; mode and code auth are changed directly. */
+export type SettingsValue = Omit<Settings, 'mode' | 'codeAuth'>
+
 export const toForm = (s: Settings): SettingsForm => ({
   defaultModel: s.defaultModel ?? '',
   ablationRuns: String(s.ablationRuns),
@@ -19,7 +22,7 @@ function inRange(text: string, min: number, max: number, integer: boolean): numb
 }
 
 /** Validates the form; returns the request body or the field errors. */
-export function parseSettingsForm(f: SettingsForm): { value: Settings } | { errors: Partial<Record<keyof SettingsForm, string>> } {
+export function parseSettingsForm(f: SettingsForm): { value: SettingsValue } | { errors: Partial<Record<keyof SettingsForm, string>> } {
   const errors: Partial<Record<keyof SettingsForm, string>> = {}
   const ablationRuns = inRange(f.ablationRuns, 1, 10, true)
   const baselineRuns = inRange(f.baselineRuns, 0, 10, true)

@@ -13,6 +13,9 @@
   --ps-text: #d7d9de;
   --ps-text-muted: #8a8f98;
   --ps-danger: #e5736d;
+  --code-path-color: #7cc8e8;
+  --ps-ok: #7fbf7f;
+  --ps-warn: #e0b84f;
   --ps-font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --ps-font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --ps-fade: 120ms;

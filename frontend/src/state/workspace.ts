@@ -2,10 +2,10 @@ import { create } from 'zustand'
 import type { CardState, ContextItem, MergeResult } from '../api/types.ts'
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
 
-export type TabType = 'card' | 'graph' | 'chat' | 'branches' | 'settings'
+export type TabType = 'card' | 'graph' | 'chat' | 'branches' | 'settings' | 'code'
 
 export type Tab = {
-  /** Stable key: `card:3`, `graph`, `chat:5`, `branches:5`, `settings`. */
+  /** Stable key: `card:3`, `graph`, `chat:5`, `branches:5`, `code:2`, `settings`. */
   id: string
   type: TabType
   refId?: number
@@ -34,7 +34,7 @@ export function pathToTab(pathname: string): Tab | null {
   const parts = pathname.split('/').filter(Boolean)
   if (parts.length === 1 && parts[0] === 'graph') return makeTab('graph')
   if (parts.length === 1 && parts[0] === 'settings') return makeTab('settings')
-  if (parts.length === 2 && (parts[0] === 'card' || parts[0] === 'chat' || parts[0] === 'branches') && /^\d+$/.test(parts[1])) {
+  if (parts.length === 2 && (parts[0] === 'card' || parts[0] === 'chat' || parts[0] === 'branches' || parts[0] === 'code') && /^\d+$/.test(parts[1])) {
     return makeTab(parts[0], Number(parts[1]))
   }
   return null

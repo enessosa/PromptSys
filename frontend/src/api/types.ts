@@ -3,6 +3,10 @@
 export const CARD_KINDS = ['note', 'file', 'memory', 'rule', 'search'] as const
 export const LINK_KINDS = ['related', 'derived_from', 'part_of', 'contradicts'] as const
 
+export type PlanWindow = { utilization: number; resetsAt: string | null }
+/** Account-wide plan limits: the newest report of any session (`GET /api/code/plan-usage`). */
+export type PlanUsage = { fiveHour?: PlanWindow; sevenDay?: PlanWindow; subscriptionType?: string | null; observedAt: string }
+
 export type CardKind = (typeof CARD_KINDS)[number]
 export type LinkKind = (typeof LINK_KINDS)[number]
 
@@ -14,6 +18,10 @@ export type Link = {
   label: string | null
   createdAt: string
 }
+
+/** Set on cards recorded by the coding agent; null/absent for user cards. */
+export type CardOrigin = 'agent'
+export type ReviewStatus = 'proposed' | 'confirmed' | 'corrected' | 'rejected'
 
 export type CardSummary = {
   id: number
@@ -27,6 +35,8 @@ export type CardSummary = {
   archivedAt: string | null
   createdAt: string
   updatedAt: string
+  origin?: CardOrigin | null
+  reviewStatus?: ReviewStatus | null
 }
 
 export type Card = Omit<CardSummary, 'excerpt'> & {
@@ -58,6 +68,8 @@ export type GraphNodeDto = {
   x: number | null
   y: number | null
   degree: number
+  origin?: CardOrigin | null
+  reviewStatus?: ReviewStatus | null
   /** Only present once the chat feature reports the active context. */
   inContext?: boolean
 }
@@ -279,4 +291,42 @@ export type Settings = {
   baselineRuns: number
   ablationTemperature: number
   accentColor: string | null
+  /** `api` = all features; `claude_code` = coding-agent sessions (some API-call features are locked). */
+  mode: AppMode
+  codeAuth: CodeAuth
 }
+
+export type AppMode = 'api' | 'claude_code'
+export type CodeAuth = 'local_login' | 'api_key'
+
+// --- Claude Code mode ---
+
+export type CodeSessionStatus = 'idle' | 'running' | 'waiting_approval' | 'error' | 'stopped'
+
+/** How much the agent may do without asking. Ask = `default`; "bypass" is deliberately not offered. */
+export type PermissionMode = 'default' | 'acceptEdits' | 'plan' | 'auto'
+
+export type CodeSession = {
+  id: number
+  title: string
+  projectPath: string
+  status: CodeSessionStatus
+  permissionMode: PermissionMode
+  createdAt: string
+  updatedAt: string
+}
+
+export type CodeStatus = { available: boolean; reason?: string; mode: AppMode; codeAuth: CodeAuth }
+
+/** One persisted event as `GET /code/sessions/:id` returns it. */
+export type CodeEventRecord = { seq: number; type: string; payload: Record<string, unknown>; createdAt: string }
+
+export type CodeSessionDetail = { session: CodeSession; slashCommands: string[]; events: CodeEventRecord[] }
+
+export type SessionCard = { id: number; title: string; body: string; reviewStatus: ReviewStatus; version: number }
+
+export type GitInfo = { isGitRepo: boolean; branch?: string; dirty?: boolean }
+
+export type ChangeStatus = 'modified' | 'added' | 'deleted' | 'untracked' | 'renamed'
+export type FileChange = { path: string; oldPath?: string; status: ChangeStatus; added: number; removed: number; diff: string; truncated: boolean }
+export type SessionChanges = { isGitRepo: boolean; files: FileChange[] }

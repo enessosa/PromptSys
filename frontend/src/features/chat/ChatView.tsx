@@ -18,6 +18,8 @@ import { RegenerateDialog } from './RegenerateDialog.tsx'
 import { chatKeys, useConversation, useHealth, useTimelineMessages, useTree } from './hooks.ts'
 import { keys } from '../cards/hooks.ts'
 import { useChatStream } from './useChatStream.ts'
+import { useMode } from '../code/hooks.ts'
+import { GATED_TIP } from '../code/model.ts'
 import styles from './chat.module.css'
 
 export const NO_API_KEY_TEXT =
@@ -39,12 +41,15 @@ function ChatBody({ conversationId, timelineId, title, showRules }: { conversati
   const tree = useTree(conversationId)
   const extract = useExtractRules(conversationId)
   const { mutate: extractRules } = extract
+  const { claudeCode } = useMode()
   const showRulesRef = useRef(showRules)
+  const claudeCodeRef = useRef(claudeCode)
   useEffect(() => {
     showRulesRef.current = showRules
+    claudeCodeRef.current = claudeCode
   })
   // FR-15: one extra API call after each finished answer, only while the toggle is on.
-  const stream = useChatStream(conversationId, { onAnswer: (id) => showRulesRef.current && extractRules(id) })
+  const stream = useChatStream(conversationId, { onAnswer: (id) => showRulesRef.current && !claudeCodeRef.current && extractRules(id) })
   const qc = useQueryClient()
   const toggleRules = useMutation({
     mutationFn: (on: boolean) => api(`/api/conversations/${conversationId}`, { method: 'PATCH', body: { showDerivedRules: on } }),
@@ -119,8 +124,8 @@ function ChatBody({ conversationId, timelineId, title, showRules }: { conversati
         {branchLabel && <span className={styles.branchTag}>Branch: {branchLabel}</span>}
         <span className={styles.spacer} />
         {extract.isPending && <span className={styles.branchTag}>Extracting rules…</span>}
-        <label className={styles.rulesToggle} title="Costs one extra API call per answer">
-          <Checkbox checked={showRules} disabled={toggleRules.isPending} onChange={(e) => toggleRules.mutate(e.target.checked)} aria-label="Show derived rules" />
+        <label className={styles.rulesToggle} title={claudeCode ? GATED_TIP : 'Costs one extra API call per answer'}>
+          <Checkbox checked={showRules} disabled={toggleRules.isPending || claudeCode} onChange={(e) => toggleRules.mutate(e.target.checked)} aria-label="Show derived rules" />
           Show derived rules
         </label>
       </div>

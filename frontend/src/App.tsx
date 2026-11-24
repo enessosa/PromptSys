@@ -21,6 +21,8 @@ function App() {
                 <Route path="chat/:id" element={null} />
                 <Route path="branches/:id" element={null} />
                 <Route path="settings" element={null} />
+                <Route path="code" element={null} />
+                <Route path="code/:id" element={null} />
               </Route>
               <Route path="*" element={<NotFoundPage />} />
             </Routes>

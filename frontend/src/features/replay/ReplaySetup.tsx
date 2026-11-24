@@ -11,6 +11,8 @@ import { CardPicker } from '../chat/ContextTray.tsx'
 import { useSetActiveTimeline } from '../chat/hooks.ts'
 import { buildContextChanges, CARD_STATES, describeChanges, type CardEdit } from './contextChanges.ts'
 import { useCreateReplay, useReplayDryRun } from './hooks.ts'
+import { useMode } from '../code/hooks.ts'
+import { GATED_TIP } from '../code/model.ts'
 import styles from './replay.module.css'
 
 type Props = {
@@ -45,6 +47,7 @@ export function ReplaySetup({ conversationId, message, base, sourceTimelineId, o
 
   const changes = buildContextChanges(baseItems, items, edits)
   const input = { fromMessageId: message.id, contextChanges: changes, mode, ...(sourceTimelineId !== null ? { sourceTimelineId } : {}) }
+  const { claudeCode } = useMode()
   const modeOk = mode === 'step' || warned
   const known = new Set(base.map((c) => c.cardId))
 
@@ -175,8 +178,8 @@ export function ReplaySetup({ conversationId, message, base, sourceTimelineId, o
             Step by step (recommended): you send, edit or skip each original prompt
           </label>
           <label>
-            <input type="radio" name="replay-mode" checked={mode === 'auto'} onChange={() => { setMode('auto'); touch() }} />
-            Automatic: all following prompts are sent in a row
+            <input type="radio" name="replay-mode" checked={mode === 'auto'} disabled={claudeCode} title={claudeCode ? GATED_TIP : undefined} onChange={() => { setMode('auto'); touch() }} />
+            Automatic{claudeCode ? ' (only available in API mode)' : ''}: all following prompts are sent in a row
           </label>
           {mode === 'auto' && (
             <label className={styles.warn}>

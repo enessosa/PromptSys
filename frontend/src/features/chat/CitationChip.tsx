@@ -5,6 +5,8 @@ import { badgeText } from '../ablation/model.ts'
 import { HoverCard } from '../../components/HoverCard.tsx'
 import { makeTab, useWorkspace } from '../../state/workspace.ts'
 import { CardPreview } from '../cards/CardPreview.tsx'
+import { useMode } from '../code/hooks.ts'
+import { GATED_TIP } from '../code/model.ts'
 import { cardLabel } from '../cards/model.ts'
 import styles from './chat.module.css'
 
@@ -46,11 +48,7 @@ export function CitationChip({ marker, cardId, valid = true, onWhy, score }: Pro
           {badgeText(score)}
         </span>
       )}
-      {valid && onWhy && (
-        <button type="button" className={styles.why} aria-label={`Why ${marker}?`} onClick={() => onWhy(cardId)}>
-          Why?
-        </button>
-      )}
+      {valid && onWhy && <WhyButton marker={marker} onClick={() => onWhy(cardId)} />}
     </span>
   )
 }
@@ -58,4 +56,13 @@ export function CitationChip({ marker, cardId, valid = true, onWhy, score }: Pro
 /** Chip for a card id without a text marker (used / not used rows). */
 export function CardRefChip({ cardId, children, onWhy, score }: { cardId: number; children?: ReactNode } & Pick<Props, 'onWhy' | 'score'>) {
   return <CitationChip marker={children ? String(children) : cardLabel(cardId)} cardId={cardId} onWhy={onWhy} score={score} />
+}
+
+function WhyButton({ marker, onClick }: { marker: string; onClick: () => void }) {
+  const { claudeCode } = useMode()
+  return (
+    <button type="button" className={styles.why} aria-label={`Why ${marker}?`} disabled={claudeCode} title={claudeCode ? GATED_TIP : undefined} onClick={onClick}>
+      Why?
+    </button>
+  )
 }

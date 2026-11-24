@@ -1,11 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Button, FormControl, TextInput } from '@primer/react'
-import type { Settings } from '../../api/types.ts'
+import { Button, FormControl, Select, TextInput } from '@primer/react'
+import type { CodeAuth, Settings } from '../../api/types.ts'
 import { EmptyState } from '../../components/EmptyState.tsx'
 import { useHealth } from '../chat/hooks.ts'
 import { applyAccent } from './accent.ts'
 import { parseSettingsForm, toForm, type SettingsForm } from './settingsForm.ts'
 import { useSaveSettings, useSettings } from './hooks.ts'
+import { ModeSwitch } from '../code/ModeSwitch.tsx'
 import { ApiKeyButton } from './ApiKeyButton.tsx'
 import { desktopApiKeyAction } from './promptsys.ts'
 import styles from './settings.module.css'
@@ -46,6 +47,24 @@ function SettingsForm({ saved }: { saved: Settings }) {
   return (
     <form className={styles.settings} noValidate onSubmit={submit} aria-label="Settings">
       <h2>Settings</h2>
+
+      <section>
+        <h3>Mode</h3>
+        <ModeSwitch />
+        <p className={styles.muted}>API: you control exactly what is sent. Claude Code: coding-agent sessions; ablation, automatic replay and automatic rule extraction are locked.</p>
+        <FormControl>
+          <FormControl.Label>Claude Code login</FormControl.Label>
+          <Select
+            value={saved.codeAuth ?? 'local_login'}
+            disabled={save.isPending}
+            onChange={(e) => save.mutate({ codeAuth: e.target.value as CodeAuth })}
+          >
+            <Select.Option value="local_login">Local Claude Code login</Select.Option>
+            <Select.Option value="api_key">API key</Select.Option>
+          </Select>
+          <FormControl.Caption>With the local login, ANTHROPIC_API_KEY is not passed to the agent. PromptSys never sees your login.</FormControl.Caption>
+        </FormControl>
+      </section>
 
       <section>
         <h3>API key</h3>
