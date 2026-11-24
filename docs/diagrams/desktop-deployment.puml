@@ -1,0 +1,40 @@
+@startuml desktop-deployment
+title Desktop app - processes, windows and local data
+
+node "User machine" {
+  node "Electron main process" as main {
+    component "main.ts" as mainTs
+    component "keystore (safeStorage)" as ks
+  }
+  node "utilityProcess: PromptSys backend" as be {
+    component "backend/dist/main.js\nHono on 127.0.0.1:PORT" as hono
+  }
+  node "Renderer windows (sandboxed)" as rend {
+    component "Main window\nloads http://127.0.0.1:PORT\npreload-app.js" as win
+    component "Settings / error window\nlocal HTML, preload-ui.js" as ui
+  }
+  folder "userData" as ud {
+    database "promptsys.db" as db
+    file "api-key.bin\n(encrypted)" as key
+    folder "models/\nembedding cache" as models
+    folder "logs/" as logs
+  }
+}
+cloud "Claude API" as claude
+
+mainTs -right-> hono : utilityProcess.fork\nenv: PORT, DB_URL, API key
+mainTs -down-> win : createMainWindow
+mainTs -down-> ui : createUiWindow
+ui -right-> mainTs : IPC settings:save-key
+ks -down-> key : read / write
+rend -[hidden]down-> ud
+win -down-> hono : HTTP, SSE
+hono -down-> db : SQL
+hono -down-> models : EMBEDDING_CACHE_DIR
+hono -right-> claude : HTTPS
+
+note bottom of main
+  PORT: first free from 47800 (20 ports), else random.
+  Health check: GET /api/health
+end note
+@enduml

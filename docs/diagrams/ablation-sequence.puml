@@ -1,0 +1,38 @@
+@startuml ablation-sequence
+title "Why?" ablation - dry run, confirm, runs, score
+autonumber
+hide footbox
+
+actor User
+participant "WhyDialog /\nuseAblationRun" as FE
+participant "ablationRoutes" as R
+participant "AblationService" as S
+participant "assemblePrompt" as A
+participant "LlmClient" as L
+participant "Embedder" as E
+database SQLite
+
+User -> FE : pick cards, runs, baseline
+FE -> R : POST /messages/:id/ablations\n{dryRun: true}
+R -> S : prepare(messageId, request)
+S -> A : assemblePrompt (with / without card)
+S --> R : plan
+R --> FE : estimatedApiCalls
+User -> FE : confirm
+FE -> R : POST /messages/:id/ablations
+R -> S : prepare(), then execute(plan, hooks)
+S -> E : embed(original)
+loop baseline runs, then each card
+  S -> L : complete(prompt, temperature)
+  S -> E : embed(reply.text)
+  S -> SQLite : INSERT ablation_runs\n(cosine similarity)
+  R --> FE : SSE progress
+  opt last run of a card
+    S -> S : resultOf() -> scoreCard()
+    R --> FE : SSE ablation_result
+  end
+end
+R --> FE : SSE message_stop
+FE -> R : GET /messages/:id/ablations
+R -> S : results(messageId)
+@enduml

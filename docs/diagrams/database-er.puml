@@ -1,0 +1,124 @@
+@startuml database-er
+title Database schema (migrations 0001-0004)
+hide circle
+
+entity cards {
+  * id : INTEGER <<PK>>
+  --
+  title, body, kind
+  folder_path, default_included
+  version, archived_at
+  forked_from_id <<FK>>
+  merged_into_id <<FK>>
+}
+entity card_versions {
+  * card_id <<PK,FK>>
+  * version <<PK>>
+  --
+  title, body
+}
+entity card_links {
+  * id <<PK>>
+  --
+  source_id <<FK>>
+  target_id <<FK>>
+  kind, label
+}
+entity card_merges {
+  * id <<PK>>
+  --
+  target_id <<FK>>
+  source_id <<FK>>
+  source_title, source_body
+  undone_at
+}
+entity conversations {
+  * id <<PK>>
+  --
+  title, system_prompt, model
+  active_timeline_id
+  show_derived_rules
+}
+entity timelines {
+  * id <<PK>>
+  --
+  conversation_id <<FK>>
+  parent_timeline_id <<FK>>
+  branch_point_id <<FK>>
+  head_message_id <<FK>>
+  replay_status, replay_mode
+  replay_source_id <<FK>>
+  replay_next_id <<FK>>
+}
+entity messages {
+  * id <<PK>>
+  --
+  conversation_id <<FK>>
+  parent_id <<FK>>
+  replay_of_id <<FK>>
+  role, content, status, model
+  input_tokens, output_tokens
+}
+entity message_cards {
+  * message_id <<PK,FK>>
+  * card_id <<PK,FK>>
+  --
+  card_version <<FK>>
+  state, position
+}
+entity timeline_context {
+  * timeline_id <<PK,FK>>
+  * card_id <<PK,FK>>
+  --
+  card_version <<FK>>
+  state, position
+}
+entity citations {
+  * id <<PK>>
+  --
+  message_id <<FK>>
+  card_id <<FK>>
+  raw_marker, valid
+}
+entity derived_rules {
+  * id <<PK>>
+  --
+  conversation_id <<FK>>
+  message_id <<FK>>
+  source_card_id <<FK>>
+  corrected_card_id <<FK>>
+  source_kind, status, text
+}
+entity ablation_runs {
+  * id <<PK>>
+  --
+  message_id <<FK>>
+  card_id <<FK>>
+  run_index, answer
+  similarity, temperature
+}
+entity settings {
+  * key <<PK>>
+  --
+  value : JSON
+}
+
+cards ||--o{ card_versions
+cards ||--o{ card_links
+cards ||--o{ card_merges
+conversations ||--o{ messages
+conversations ||--o{ timelines
+conversations ||--o{ derived_rules
+messages ||--o{ message_cards
+messages ||--o{ citations
+messages ||--o{ ablation_runs
+messages ||--o{ derived_rules
+timelines ||--o{ timeline_context
+card_versions ||--o{ message_cards
+card_versions ||--o{ timeline_context
+cards |o--o{ citations
+cards |o--o{ ablation_runs
+messages |o--o{ messages : parent_id
+timelines |o--o{ timelines : parent_timeline_id
+messages |o--o{ timelines : head_message_id
+@enduml

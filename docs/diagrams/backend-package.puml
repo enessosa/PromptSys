@@ -1,0 +1,60 @@
+@startuml backend-package
+title Backend feature folders - imports between modules
+left to right direction
+hide empty members
+
+class "createApp (app.ts)" as createApp
+
+package "backend/src" {
+  package card {
+  }
+  package chat {
+  }
+  package assembly {
+  }
+  package citation {
+  }
+  package llm {
+  }
+  package ablation {
+  }
+  package rules {
+  }
+  package settings {
+  }
+  package auth {
+  }
+  package db {
+  }
+  package common {
+  }
+}
+
+createApp --> card : cardRoutes
+createApp --> chat : chatRoutes
+createApp --> ablation : ablationRoutes
+createApp --> rules : rulesRoutes
+createApp --> settings : settingsRoutes
+createApp --> auth : originGuard
+
+chat --> assembly : assemblePrompt
+chat --> citation : parser
+chat --> llm : LlmClient
+ablation --> chat : repository
+ablation --> assembly
+ablation --> settings
+ablation --> llm
+rules --> card : repository
+rules --> chat : repository
+rules --> assembly
+rules --> settings
+rules --> llm
+assembly --> llm : LlmMessage
+llm ..> ablation : fake Embedder
+
+note bottom of common
+  card, chat, assembly, ablation, rules, auth, llm
+  and settings also import common (errors, validation).
+  card, chat, rules, ablation use db (transaction).
+end note
+@enduml

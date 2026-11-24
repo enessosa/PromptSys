@@ -97,6 +97,28 @@ Version 1 uses **self-citation + similarity ablation**, both of which work with 
 | LLM | Anthropic Claude API |
 | Deployment | Desktop app with Electron (after the web version) |
 
+## Architecture diagrams
+
+PlantUML sources and more details in [docs/diagrams](docs/diagrams/README.md).
+
+### Overview
+![PromptSys container diagram](docs/diagrams/architecture-c4.svg)
+
+### Backend modules
+![Backend feature folders](docs/diagrams/backend-package.svg)
+
+### Send a message
+![Send a message: streamed answer with citations](docs/diagrams/chat-sequence.svg)
+
+### "Why?" ablation
+!["Why?" ablation](docs/diagrams/ablation-sequence.svg)
+
+### Database schema
+![Database schema](docs/diagrams/database-er.svg)
+
+### Desktop app
+![Desktop app: processes, windows and local data](docs/diagrams/desktop-deployment.svg)
+
 ## Open questions
 
 - **Granularity:** What is one card: a whole document, a section, a sentence?

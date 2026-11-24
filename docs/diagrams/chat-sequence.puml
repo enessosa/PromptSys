@@ -1,0 +1,44 @@
+@startuml chat-sequence
+title Send a message - streamed answer with citations
+autonumber
+hide footbox
+
+actor User
+participant "useChatStream\n(frontend)" as FE
+participant "chatRoutes\n(chat/routes.ts)" as R
+participant "ChatRepository" as Repo
+participant "assemblePrompt\n(assembly)" as A
+participant "streamGeneration /\nrunGeneration" as G
+participant "LlmClient" as L
+participant "StreamingCitationParser" as P
+database SQLite
+participant "Claude API" as C
+
+User -> FE : send(timelineId, content)
+FE -> R : POST /api/timelines/:id/messages
+R -> Repo : getTimeline, defaultContext
+R -> A : assemblePrompt(...)
+A --> R : system, messages, cardIds
+R -> Repo : insertMessage (user, assistant)
+Repo -> SQLite : short transaction
+R -> G : streamGeneration(job)
+G --> FE : SSE message_start
+G -> L : stream(request, signal)
+L -> C : messages.create (stream)
+loop each text delta
+  C --> L : text_delta
+  L --> G : {type: text}
+  G -> P : push(text)
+  P --> G : text / marker events
+  G --> FE : SSE text_delta, citation
+  opt every SAVE_INTERVAL_MS
+    G -> Repo : saveProgress
+  end
+end
+L --> G : {type: done, usage}
+G -> P : flush()
+G -> Repo : finishMessage, insertCitations
+Repo -> SQLite : short transaction
+G --> FE : SSE message_stop
+FE -> FE : refresh() query cache
+@enduml
