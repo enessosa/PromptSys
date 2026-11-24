@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "description": "PromptSys desktop app",
   "author": "PromptSys",
+  "homepage": "https://github.com/enessosa/PromptSys",
   "main": "out/main.js",
   
   "devDependencies": {
@@ -25,6 +26,6 @@
     "test": "vitest run",
     "stage": "node scripts/stage.mjs",
     "pack": "npm run build && npm run stage && electron-builder --dir",
-    "dist": "npm run build && npm run stage && electron-builder"
+    "dist": "npm run build && npm run stage && electron-builder --publish never"
   }
 }

@@ -30,3 +30,4 @@ linux:
     - AppImage
     - deb
   category: Development
+  maintainer: enessosa <enessosa@users.noreply.github.com>

@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { isAllowedRequest, isAppUrl, isExternalHttpUrl } from './navigation'
 import { backendEnv, dataPaths, resourcePaths } from './paths'
@@ -5,11 +6,11 @@ import { backendEnv, dataPaths, resourcePaths } from './paths'
 describe('paths', () => {
   it('uses the resources folder when packaged and the repository otherwise', () => {
     const packaged = resourcePaths({ packaged: true, resourcesPath: '/App/Resources', repoRoot: '/repo' })
-    expect(packaged.backendEntry).toBe('/App/Resources/backend/dist/main.js')
-    expect(packaged.frontendDist).toBe('/App/Resources/frontend')
+    expect(packaged.backendEntry).toBe(join('/', 'App', 'Resources', 'backend', 'dist', 'main.js'))
+    expect(packaged.frontendDist).toBe(join('/', 'App', 'Resources', 'frontend'))
     const dev = resourcePaths({ packaged: false, resourcesPath: '/x', repoRoot: '/repo' })
-    expect(dev.backendEntry).toBe('/repo/backend/dist/main.js')
-    expect(dev.frontendDist).toBe('/repo/frontend/dist')
+    expect(dev.backendEntry).toBe(join('/', 'repo', 'backend', 'dist', 'main.js'))
+    expect(dev.frontendDist).toBe(join('/', 'repo', 'frontend', 'dist'))
   })
 
   it('builds the backend environment from an allowlist', () => {
@@ -20,7 +21,7 @@ describe('paths', () => {
       apiKey: 'k',
       parentEnv: { PATH: '/bin', ANTHROPIC_API_KEY: 'stray', SECRET: 'x', PORT: '9' },
     })
-    expect(env).toMatchObject({ NODE_ENV: 'production', PORT: '47800', DB_URL: '/data/promptsys.db', FRONTEND_DIST: '/fe', EMBEDDING_CACHE_DIR: '/data/models', PATH: '/bin', ANTHROPIC_API_KEY: 'k' })
+    expect(env).toMatchObject({ NODE_ENV: 'production', PORT: '47800', DB_URL: join('/', 'data', 'promptsys.db'), FRONTEND_DIST: '/fe', EMBEDDING_CACHE_DIR: join('/', 'data', 'models'), PATH: '/bin', ANTHROPIC_API_KEY: 'k' })
     expect(env.SECRET).toBeUndefined()
   })
 
