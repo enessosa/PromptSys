@@ -2,7 +2,7 @@
 
 **See, negotiate and verify the context behind every AI answer.**
 
-> **Status:** Project skeleton set up (TypeScript backend with Hono, React frontend); no features implemented yet. This README describes the intended design.
+> **Status:** Working prototype (semester project). API mode with chat, cards, ablation, derived rules, replays and branch view; Agent mode for coding sessions; desktop app for macOS, Windows and Linux.
 
 ---
 
@@ -53,39 +53,55 @@ PromptSys is a local chat application, later shipped as a desktop app, that sits
 
 Version 1 uses **self-citation + similarity ablation**, both of which work with a hosted API. Likelihood-based attribution (see ContextCite, AttriBoT) is a later option via a local model.
 
-## Planned features
+## Features
 
 ### MVP
-- [ ] Chat via the Claude API
-- [ ] Context registry: notes and files as cards with stable IDs
-- [ ] Prompt assembly with ID-tagged context blocks
-- [ ] Parsing of citation markers (incl. during streaming)
-- [ ] Card view below each answer (used / unused)
+- [x] Chat via the Claude API
+- [x] Context registry: notes and files (text, Markdown, code, PDF, DOCX) as cards with stable IDs
+- [x] Prompt assembly with ID-tagged context blocks
+- [x] Parsing of citation markers (incl. during streaming)
+- [x] Card view below each answer (used / unused)
+- [x] Graph view: cards as nodes, links as lines; link and merge cards there
 
 ### Negotiation
-- [ ] Pre-send card review: pin, exclude, add
-- [ ] Own memory store, managed as cards
-- [ ] Regenerate without selected cards
+- [x] Pre-send card review: pin, exclude, add
+- [x] Own memory store, managed as cards
+- [x] Regenerate without selected cards
 
 ### Verification
-- [ ] "Why?" button: ablation per card
-- [ ] Embedding-based change score per card
-- [ ] Multiple runs / low temperature to reduce noise
+- [x] "Why?" button: ablation per card
+- [x] Embedding-based change score per card
+- [x] Multiple runs to reduce noise
 
 ### Understanding
-- [ ] Derived rules: show the rules and assumptions the model derived, with their source (card or prior knowledge)
-- [ ] Confirm or correct a derived rule; a corrected rule becomes a card
+- [x] Derived rules: show the rules and assumptions the model derived, with their source (card or prior knowledge)
+- [x] Confirm or correct a derived rule; a corrected rule becomes a card
 
 ### Alternate timelines
-- [ ] Pick an earlier message as branch point, change the context and replay the following prompts
-- [ ] Step-by-step replay (recommended) or automatic replay with an explicit warning
-- [ ] Branch off during a replay and continue freely
-- [ ] Show the expected number of API calls before a replay
-- [ ] Branch view of all timelines, similar to a Git graph
+- [x] Pick an earlier message as branch point, change the context and replay the following prompts
+- [x] Step-by-step replay (recommended) or automatic replay with an explicit warning
+- [x] Branch off during a replay and continue freely
+- [x] Show the expected number of API calls before a replay
+- [x] Branch view of all timelines, similar to a Git graph
+
+### Agent mode
+A second mode for coding sessions on a local project folder. It runs your installed Claude Code through the Claude Agent SDK and shares the card library with API mode.
+- [x] Sessions with a live timeline, tool approvals, permission modes (ask, accept edits, plan, auto) and a stop button
+- [x] Status line: model, folder, git branch, context usage, tokens; plan limits once for all sessions
+- [x] Changes panel (uncommitted diff), subagents panel, slash commands and skills of your setup, highlighted code blocks
+- [x] The agent proposes glossary cards (terms and resources, sorted into folders); you confirm, correct or reject them, and only accepted cards join the library
+- [x] Confirmed cards bind later turns; reference any card in a message with `@` or by dragging it in
 
 ### Later
 - [ ] Local model (e.g. via Ollama) for likelihood attribution
 - [ ] Web search results as cards
+
+## Download
+
+Installers for macOS, Windows and Linux are attached to each [release](https://github.com/enessosa/PromptSys/releases) (unsigned: macOS and Windows warn on first start).
+
+- **API mode** needs your own Claude API key (entered in the app, stored in the system keychain).
+- **Agent mode** runs coding sessions on your installed Claude Code. PromptSys does not ship it: [install Claude Code](https://code.claude.com/docs/en/setup) and run `claude` once to sign in. Agent mode runs your own installed Claude Code with your own login and plan; PromptSys never sees the login, and your use is subject to Anthropic's terms.
 
 ## Tech stack
 
@@ -94,8 +110,8 @@ Version 1 uses **self-citation + similarity ablation**, both of which work with 
 | Backend | TypeScript, Node.js, Hono |
 | Frontend | React, TypeScript, Vite, Primer React |
 | Database | SQLite |
-| LLM | Anthropic Claude API |
-| Deployment | Desktop app with Electron (after the web version) |
+| LLM | Anthropic Claude API; Claude Agent SDK (Agent mode) |
+| Deployment | Desktop app with Electron (macOS, Windows, Linux), or backend + browser |
 
 ## Architecture diagrams
 
@@ -137,4 +153,4 @@ PromptSys does not try to advance this research. It aims to make it usable as an
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE). Third-party components keep their own licenses; the Claude Agent SDK is subject to Anthropic's terms. Claude and Claude Code are trademarks of Anthropic; this project is not affiliated with or endorsed by Anthropic.
