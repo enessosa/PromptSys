@@ -1,0 +1,62 @@
+/* Tokens copied from frontend/src/app/theme.css (dark theme). */
+:root {
+  color-scheme: dark;
+  --ps-accent: #5eb5a6;
+  --ps-accent-muted: rgb(94 181 166 / 0.16);
+  --ps-bg-sidebar: #16171a;
+  --ps-bg-main: #1c1d21;
+  --ps-bg-raised: #232429;
+  --ps-border: #2e3036;
+  --ps-text: #d7d9de;
+  --ps-text-muted: #8a8f98;
+  --ps-danger: #e5736d;
+  --ps-font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --ps-font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--ps-bg-main);
+  color: var(--ps-text);
+  font-family: var(--ps-font-ui);
+  font-size: 13.5px;
+  line-height: 1.5;
+  padding: 28px 32px;
+  box-sizing: border-box;
+  -webkit-user-select: none;
+  user-select: none;
+}
+h1 { font-size: 17px; font-weight: 600; margin: 0 0 16px; }
+p { margin: 0 0 12px; }
+.muted { color: var(--ps-text-muted); }
+label { display: block; margin-bottom: 6px; }
+input[type="password"] {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  background: var(--ps-bg-raised);
+  color: var(--ps-text);
+  border: 1px solid var(--ps-border);
+  border-radius: 6px;
+  font-family: var(--ps-font-mono);
+  font-size: 13px;
+  -webkit-user-select: text;
+  user-select: text;
+}
+input:focus-visible, button:focus-visible { outline: 2px solid var(--ps-accent); outline-offset: 1px; }
+.row { display: flex; gap: 8px; margin-top: 12px; }
+button {
+  padding: 7px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--ps-border);
+  background: var(--ps-bg-raised);
+  color: var(--ps-text);
+  font: inherit;
+  cursor: pointer;
+}
+button.primary { background: var(--ps-accent); border-color: var(--ps-accent); color: #10201d; }
+button:disabled { opacity: 0.5; cursor: default; }
+[hidden] { display: none !important; }
+.error { color: var(--ps-danger); }
+.ok { color: var(--ps-accent); }
+code { font-family: var(--ps-font-mono); -webkit-user-select: text; user-select: text; word-break: break-all; }

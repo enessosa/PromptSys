@@ -1,0 +1,32 @@
+appId: com.promptsys.desktop
+productName: PromptSys
+copyright: PromptSys
+directories:
+  output: dist
+files:
+  - out/**
+  - package.json
+# Backend and frontend stay outside the asar archive: the backend runs as its own process and loads native modules.
+extraResources:
+  - from: stage/backend
+    to: backend
+  - from: stage/frontend
+    to: frontend
+# electron-builder never copies node_modules folders via extraResources; this hook copies the backend's into the package.
+afterPack: scripts/after-pack.cjs
+npmRebuild: false
+asar: true
+mac:
+  category: public.app-category.productivity
+  target:
+    - dir
+    - dmg
+    - zip
+  identity: null # no code signing (decided); the app is unsigned and macOS asks for confirmation on first start
+win:
+  target: nsis
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Development

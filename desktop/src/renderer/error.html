@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'" />
+  <title>PromptSys</title>
+  <link rel="stylesheet" href="ui.css" />
+</head>
+<body>
+  <h1>PromptSys could not start</h1>
+  <p id="message" class="error"></p>
+  <p class="muted">Log file:<br /><code id="log"></code></p>
+  <div class="row">
+    <button id="retry" class="primary" type="button">Try again</button>
+    <button id="open-log" type="button">Show log</button>
+    <button id="quit" type="button">Quit</button>
+  </div>
+  <script src="error.js"></script>
+</body>
+</html>
