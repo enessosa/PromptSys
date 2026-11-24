@@ -2,7 +2,7 @@
 
 **See, negotiate and verify the context behind every AI answer.**
 
-> **Status:** Planning phase. Nothing here is implemented yet; this README describes the intended design.
+> **Status:** Project skeleton set up (TypeScript backend with Hono, React frontend); no features implemented yet. This README describes the intended design.
 
 ---
 
@@ -18,11 +18,11 @@ Human and AI never agree on a shared basis for the conversation.
 
 ## The idea
 
-PromptSys is a self-hosted chat application that sits **in front of** the model instead of inside it. Because it assembles the context itself, it knows exactly what was sent and can show every piece as a **context card**.
+PromptSys is a local chat application, later shipped as a desktop app, that sits **in front of** the model instead of inside it. Because it assembles the context itself, it knows exactly what was sent and can show every piece as a **context card**.
 
 ```
 ┌────────────┐      ┌─────────────────────────────┐      ┌───────────┐
-│  Browser   │ ───▶ │  PromptSys                  │ ───▶ │  LLM API  │
+│  UI        │ ───▶ │  PromptSys                  │ ───▶ │  LLM API  │
 │  (cards)   │ ◀─── │  registry · assembly · eval │ ◀─── │  (Claude) │
 └────────────┘      └─────────────────────────────┘      └───────────┘
 ```
@@ -37,6 +37,11 @@ PromptSys is a self-hosted chat application that sits **in front of** the model 
 
 3. **After the answer — verify**
    Click *"Why?"* on a card and PromptSys regenerates the answer **without** it, then measures how much the answer changes. That measures what the card actually did, instead of relying on what the model says it did.
+
+### Beyond single answers
+
+- **Derived rules:** PromptSys shows the rules and assumptions the model derived from the context, e.g. *"`required` means the field must be present"*, together with their source (a card or the model's prior knowledge). You can confirm or correct them, so a misunderstanding is caught before it spreads through the whole conversation.
+- **Alternate timelines:** Pick an earlier message, change the context (disable, edit or add a card, correct a rule) and replay the following prompts in order. All timelines of a conversation are shown as branches, similar to a Git graph.
 
 ## Attribution methods
 
@@ -67,6 +72,17 @@ Version 1 uses **self-citation + similarity ablation**, both of which work with 
 - [ ] Embedding-based change score per card
 - [ ] Multiple runs / low temperature to reduce noise
 
+### Understanding
+- [ ] Derived rules: show the rules and assumptions the model derived, with their source (card or prior knowledge)
+- [ ] Confirm or correct a derived rule; a corrected rule becomes a card
+
+### Alternate timelines
+- [ ] Pick an earlier message as branch point, change the context and replay the following prompts
+- [ ] Step-by-step replay (recommended) or automatic replay with an explicit warning
+- [ ] Branch off during a replay and continue freely
+- [ ] Show the expected number of API calls before a replay
+- [ ] Branch view of all timelines, similar to a Git graph
+
 ### Later
 - [ ] Local model (e.g. via Ollama) for likelihood attribution
 - [ ] Web search results as cards
@@ -75,18 +91,19 @@ Version 1 uses **self-citation + similarity ablation**, both of which work with 
 
 | Layer | Technology |
 |---|---|
-| Backend | Python, FastAPI |
-| Frontend | React |
-| Database | PostgreSQL |
+| Backend | TypeScript, Node.js, Hono |
+| Frontend | React, TypeScript, Vite, Primer React |
+| Database | SQLite |
 | LLM | Anthropic Claude API |
-| Deployment | Docker image (GHCR), self-hosted |
+| Deployment | Desktop app with Electron (after the web version) |
 
 ## Open questions
 
 - **Granularity:** What is one card: a whole document, a section, a sentence?
 - **Noise:** How many regenerations are needed before an ablation result is trustworthy?
-- **Cost:** Ablation costs one extra API call per card. Is that acceptable for on-demand use?
 - **Model knowledge:** How do we show the difference between "the card was irrelevant" and "the model already knew this anyway"?
+
+Cost is not a reason to leave a feature out: before an ablation or replay, PromptSys shows the expected number of API calls and you decide.
 
 ## Related work
 

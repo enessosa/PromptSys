@@ -6,11 +6,11 @@
 
 | Layer | Technology |
 |---|---|
-| Backend | Python 3.14, FastAPI, uv (details in [FastAPI.md](FastAPI.md)) |
+| Backend | TypeScript, Node.js 26, Hono (details in [Backend.md](Backend.md)) |
 | Frontend | React 19, TypeScript, Vite |
-| Database | PostgreSQL |
+| Database | SQLite (one local file) |
 | LLM | Anthropic Claude API |
-| Deployment | Docker image (GHCR), self-hosted |
+| Deployment | Desktop app with Electron (after the web version) |
 
 ## Frontend
 
