@@ -1,5 +1,50 @@
 import { describe, expect, it } from 'vitest'
+import JSZip from 'jszip'
 import { createTestApp } from '../testing.ts'
+
+/** Minimal valid PDF with one page per entry; an empty string makes a page without text. */
+function makePdf(pages: string[]): Uint8Array<ArrayBuffer> {
+  const objects: string[] = []
+  const pageIds = pages.map((_, i) => 4 + i * 2)
+  objects[1] = '<< /Type /Catalog /Pages 2 0 R >>'
+  objects[2] = `<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(' ')}] /Count ${pages.length} >>`
+  objects[3] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'
+  pages.forEach((text, i) => {
+    const stream = text ? `BT /F1 24 Tf 72 700 Td (${text}) Tj ET` : ''
+    objects[4 + i * 2] =
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents ${5 + i * 2} 0 R >>`
+    objects[5 + i * 2] = `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`
+  })
+  let out = '%PDF-1.4\n'
+  const offsets: number[] = []
+  for (let id = 1; id < objects.length; id++) {
+    offsets[id] = out.length
+    out += `${id} 0 obj\n${objects[id]}\nendobj\n`
+  }
+  const xref = out.length
+  out += `xref\n0 ${objects.length}\n0000000000 65535 f \n`
+  for (let id = 1; id < objects.length; id++) out += `${String(offsets[id]).padStart(10, '0')} 00000 n \n`
+  out += `trailer\n<< /Size ${objects.length} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`
+  return new TextEncoder().encode(out) as Uint8Array<ArrayBuffer>
+}
+
+async function makeDocx(paragraphs: string[]): Promise<Uint8Array<ArrayBuffer>> {
+  const zip = new JSZip()
+  zip.file(
+    '[Content_Types].xml',
+    '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>',
+  )
+  zip.file(
+    '_rels/.rels',
+    '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>',
+  )
+  const body = paragraphs.map((p) => `<w:p><w:r><w:t>${p}</w:t></w:r></w:p>`).join('')
+  zip.file(
+    'word/document.xml',
+    `<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${body}</w:body></w:document>`,
+  )
+  return (await zip.generateAsync({ type: 'uint8array' })) as Uint8Array<ArrayBuffer>
+}
 
 function setup() {
   const { app } = createTestApp()
@@ -57,27 +102,72 @@ describe('file upload', () => {
     expect(res.body.sourceName.endsWith('.txt')).toBe(true)
   })
 
-  it('accepts exactly 1 MB and rejects more with 413 file_too_large', async () => {
+  it('accepts exactly 10 MB and rejects more with 413 file_too_large', async () => {
     const { upload } = setup()
-    const ok = await upload(new File(['a'.repeat(1024 * 1024)], 'big.txt', { type: 'text/plain' }))
+    const limit = 10 * 1024 * 1024
+    const ok = await upload(new File(['a'.repeat(limit)], 'big.txt', { type: 'text/plain' }))
     expect(ok.status).toBe(201)
-    const tooBig = await upload(new File(['a'.repeat(1024 * 1024 + 1)], 'huge.txt', { type: 'text/plain' }))
+    const tooBig = await upload(new File(['a'.repeat(limit + 1)], 'huge.txt', { type: 'text/plain' }))
     expect(tooBig.status).toBe(413)
     expect(tooBig.body.error.code).toBe('file_too_large')
+    const bigPdf = await upload(new File([new Uint8Array(limit + 1)], 'huge.pdf', { type: 'application/pdf' }))
+    expect(bigPdf.status).toBe(413)
   })
 
-  it('rejects other file types with 422 unsupported_file_type', async () => {
+  it('extracts the text of a PDF, pages separated by blank lines', async () => {
     const { upload } = setup()
+    const res = await upload(new File([makePdf(['Hello PDF', 'Second page'])], 'paper.pdf', { type: 'application/pdf' }))
+    expect(res.status).toBe(201)
+    expect(res.body).toMatchObject({
+      kind: 'file',
+      title: 'paper.pdf',
+      sourceName: 'paper.pdf',
+      mimeType: 'application/pdf',
+      body: 'Hello PDF\n\nSecond page',
+    })
+  })
+
+  it('rejects a PDF without extractable text (scanned) with 422', async () => {
+    const { upload } = setup()
+    const res = await upload(new File([makePdf([''])], 'scan.pdf', { type: 'application/pdf' }))
+    expect(res.status).toBe(422)
+    expect(res.body.error.code).toBe('unsupported_file_type')
+    expect(res.body.error.message).toBe('PDF contains no extractable text (scanned images are not supported yet)')
+  })
+
+  it('extracts the text of a DOCX', async () => {
+    const { upload } = setup()
+    const res = await upload(new File([await makeDocx(['First paragraph', 'Second paragraph'])], 'doc.docx'))
+    expect(res.status).toBe(201)
+    expect(res.body).toMatchObject({
+      kind: 'file',
+      sourceName: 'doc.docx',
+      mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      body: 'First paragraph\n\nSecond paragraph',
+    })
+  })
+
+  it('rejects files whose content does not match the extension with 422', async () => {
+    const { upload } = setup()
+    const zipBytes = await makeDocx(['x'])
     for (const file of [
-      new File([new Uint8Array([0x25, 0x50, 0x44, 0x46])], 'paper.pdf', { type: 'application/pdf' }),
-      new File([new Uint8Array([1, 2, 3])], 'photo.png', { type: 'image/png' }),
-      new File(['x'], 'archive.zip', { type: 'application/zip' }),
-      new File(['x'], 'noextension', { type: 'application/octet-stream' }),
+      new File(['just text'], 'fake.pdf', { type: 'application/pdf' }),
+      new File(['just text'], 'fake.docx'),
+      new File([makePdf(['x'])], 'pdf-as-text.txt', { type: 'text/plain' }),
+      new File([zipBytes], 'zip-as-text.md', { type: 'text/markdown' }),
+      new File([makePdf(['x'])], 'pdf-as-docx.docx'),
     ]) {
       const res = await upload(file)
-      expect(res.status).toBe(422)
+      expect(res.status, file.name).toBe(422)
       expect(res.body.error.code).toBe('unsupported_file_type')
     }
+  })
+
+  it('rejects documents with more than 500,000 characters of text with 422', async () => {
+    const { upload } = setup()
+    const res = await upload(new File([await makeDocx(['a'.repeat(500_001)])], 'long.docx'))
+    expect(res.status).toBe(422)
+    expect(res.body.error.message).toContain('500,000')
   })
 
   it('rejects "text" files that are binary or not UTF-8', async () => {
@@ -111,7 +201,7 @@ describe('file upload', () => {
     const { app } = setup()
     const res = await app.request('/api/cards/upload', {
       method: 'POST',
-      headers: { 'content-type': 'multipart/form-data; boundary=x', 'content-length': String(5 * 1024 * 1024) },
+      headers: { 'content-type': 'multipart/form-data; boundary=x', 'content-length': String(11 * 1024 * 1024) },
       body: '--x--',
     })
     expect(res.status).toBe(413)

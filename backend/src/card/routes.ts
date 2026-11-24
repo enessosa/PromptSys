@@ -33,7 +33,7 @@ export function cardRoutes(db: DatabaseSync): Hono {
   routes.post('/cards/upload', async (c) => {
     // Reject obviously oversized requests before reading them (the multipart envelope adds a little to the file size).
     if (Number(c.req.header('content-length') ?? 0) > MAX_UPLOAD_BYTES + 64 * 1024) {
-      throw new AppError(413, 'file_too_large', 'The upload is larger than 1 MB', { maxBytes: MAX_UPLOAD_BYTES })
+      throw new AppError(413, 'file_too_large', 'The upload is larger than 10 MB', { maxBytes: MAX_UPLOAD_BYTES })
     }
     let form: Record<string, unknown>
     try {

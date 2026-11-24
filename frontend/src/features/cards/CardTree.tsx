@@ -150,6 +150,7 @@ export function CardTree() {
         <input
           ref={fileInput}
           type="file"
+          accept=".pdf,.docx,.md,.markdown,.txt,.text,.log,.json,.yaml,.yml,.toml,.csv,.tsv,.xml,.html,.css,.ini,.sql,.sh,.js,.mjs,.ts,.tsx,.jsx,.py,.java,.kt,.go,.rs,.c,.h,.cpp,.cs,.rb,.php,.swift,text/*"
           hidden
           aria-label="Upload file"
           onChange={(e) => {
@@ -168,6 +169,7 @@ export function CardTree() {
           size="small"
           variant="invisible"
           aria-label="Upload file"
+          title="Text, Markdown, code, PDF, DOCX – max 10 MB"
           onClick={() => fileInput.current?.click()}
           disabled={upload.isPending}
         />

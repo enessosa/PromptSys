@@ -116,7 +116,7 @@ The server binds to `127.0.0.1` only, so it is not reachable from the network.
 | `GET /api/cards?query=&kind=&folder=&includeArchived=` | List (with `excerpt`, without `body`) |
 | `POST /api/cards` | Create (`201`), writes version 1 |
 | `GET /api/cards/:id` | One card with `body`, `links`, `backlinks`; `mergedInto` follows the merge chain to the surviving card |
-| `POST /api/cards/upload` | Multipart `file` + optional `folderPath`: UTF-8 text files only (text/*, Markdown, JSON, YAML, code …), max. 1 MB → card with `kind: "file"` (`413 file_too_large`, `422 unsupported_file_type`) |
+| `POST /api/cards/upload` | Multipart `file` + optional `folderPath`: UTF-8 text files (text/*, Markdown, JSON, YAML, code …), PDF (`unpdf`) and DOCX (`mammoth`) as extracted text; type checked by extension and magic bytes, max. 10 MB and 500,000 characters of text → card with `kind: "file"` (`413 file_too_large`, `422 unsupported_file_type`, also for scanned PDFs without text) |
 | `PATCH /api/cards/:id` | Change; new version only if title or body change; `ifVersion` for optimistic locking (`409 version_conflict`) |
 | `DELETE /api/cards/:id` | Soft delete (archive), `204` |
 | `POST /api/cards/:id/restore` | Restore an archived card |
