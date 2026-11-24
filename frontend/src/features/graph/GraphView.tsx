@@ -27,23 +27,18 @@ import { CardNode } from './CardNode.tsx'
 import { inFolder, matchesText, type GraphFilters } from './filters.ts'
 import type { CardFlowNode } from './nodeModel.ts'
 import { useGraph, useSavePositions } from './hooks.ts'
-import { computeLayout } from './layout.ts'
+import { computeLayout, pickSides } from './layout.ts'
 import { MergeDialog } from './MergeDialog.tsx'
 import styles from './graph.module.css'
 
 const nodeTypes = { card: CardNode }
 const HOLD_TO_MERGE_MS = 600
+const LAYOUT_KEY = 'promptsys.graphLayout'
+const LAYOUT_VERSION = '2'
 const FIT_OPTIONS = { padding: 0.2, maxZoom: 1 }
 
-type Side = 'top' | 'right' | 'bottom' | 'left'
 
-/** Picks the facing sides of two cards from their relative position (dominant axis wins). */
-function pickSides(from: { x: number; y: number }, to: { x: number; y: number }): [Side, Side] {
-  const dx = to.x - from.x
-  const dy = to.y - from.y
-  if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? ['right', 'left'] : ['left', 'right']
-  return dy >= 0 ? ['bottom', 'top'] : ['top', 'bottom']
-}
+
 
 export function GraphView() {
   const { data, isPending, error } = useGraph()
@@ -56,12 +51,21 @@ export function GraphView() {
   )
 }
 
-function buildNodes(data: GraphDto, prev: CardFlowNode[], plan: Map<number, { x: number; y: number }>): CardFlowNode[] {
+/** Positions stored by the old layout (round 60 px collision) overlap wide cards; such a graph is laid out once again. */
+function needsLayoutUpgrade(): boolean {
+  try {
+    return localStorage.getItem(LAYOUT_KEY) !== LAYOUT_VERSION
+  } catch {
+    return false // no storage: never overwrite positions on every start
+  }
+}
+
+function buildNodes(data: GraphDto, prev: CardFlowNode[], plan: Map<number, { x: number; y: number }>, preferPlan = false): CardFlowNode[] {
   const prevById = new Map(prev.map((n) => [n.id, n]))
   return data.nodes.map((n) => {
     const old = prevById.get(String(n.id))
-    const position =
-      old?.position ?? (n.x !== null && n.y !== null ? { x: n.x, y: n.y } : (plan.get(n.id) ?? { x: 0, y: 0 }))
+    const stored = n.x !== null && n.y !== null ? { x: n.x, y: n.y } : undefined
+    const position = old?.position ?? (preferPlan ? (plan.get(n.id) ?? stored) : (stored ?? plan.get(n.id))) ?? { x: 0, y: 0 }
     return {
       id: String(n.id),
       type: 'card' as const,
@@ -98,12 +102,23 @@ function GraphCanvas({ data }: { data: GraphDto }) {
   const { mutate: persistPositions } = savePositions
 
   const plan = useMemo(() => computeLayout(data.nodes, data.links), [data])
-  const [nodes, setNodes] = useState<CardFlowNode[]>(() => buildNodes(data, [], plan))
+  const [upgrade] = useState(() => (data.nodes.length > 0 && needsLayoutUpgrade() ? computeLayout(data.nodes, data.links, { all: true }) : null))
+  const [nodes, setNodes] = useState<CardFlowNode[]>(() => (upgrade ? buildNodes(data, [], upgrade, true) : buildNodes(data, [], plan)))
   const [seen, setSeen] = useState(data)
   if (seen !== data) {
     setSeen(data)
     setNodes((prev) => buildNodes(data, prev, plan))
   }
+
+  useEffect(() => {
+    if (!upgrade) return
+    persistPositions([...upgrade].map(([id, p]) => ({ id, ...p })))
+    try {
+      localStorage.setItem(LAYOUT_KEY, LAYOUT_VERSION)
+    } catch {
+      // storage unavailable
+    }
+  }, [upgrade, persistPositions])
 
   // Newly placed nodes get their computed position stored once, so the graph stays where it is.
   const stored = useRef(new Set<number>())
@@ -171,7 +186,7 @@ function GraphCanvas({ data }: { data: GraphDto }) {
       data.links.map((l) => {
         const from = nodes.find((n) => n.id === String(l.sourceId))
         const to = nodes.find((n) => n.id === String(l.targetId))
-        const [sourceHandle, targetHandle] = from && to ? pickSides(from.position, to.position) : ['right', 'left']
+        const [sourceHandle, targetHandle] = from && to ? pickSides(from, to) : ['right', 'left']
         return {
         id: `l${l.id}`,
         source: String(l.sourceId),
@@ -251,6 +266,7 @@ function GraphCanvas({ data }: { data: GraphDto }) {
     persistPositions([...all].map(([id, p]) => ({ id, ...p })))
     requestAnimationFrame(() => void fitView({ ...FIT_OPTIONS, duration: 250 }))
   }
+
 
   const edgeMenu = (link: Link): MenuItem[] => [
     { label: 'Edit label…', onSelect: () => setLabelFor(link) },
