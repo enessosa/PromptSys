@@ -1,0 +1,137 @@
+.graph {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.graph :global(.react-flow) {
+  --xy-background-color: var(--ps-bg-main);
+  --xy-edge-stroke: #4a4d57;
+  --xy-edge-stroke-selected: var(--ps-accent);
+  --xy-minimap-background-color: var(--ps-bg-sidebar);
+  --xy-controls-button-background-color: var(--ps-bg-raised);
+  --xy-controls-button-background-color-hover: var(--ps-border);
+  --xy-controls-button-color: var(--ps-text);
+  --xy-controls-button-border-color: var(--ps-border);
+}
+
+.graph :global(.react-flow__edge-path) {
+  stroke-width: 1;
+}
+
+.graph :global(.react-flow__edge:hover .react-flow__edge-path) {
+  stroke: var(--ps-accent);
+}
+
+.graph :global(.react-flow__edge-textbg) {
+  fill: var(--ps-bg-main);
+}
+
+.graph :global(.react-flow__edge-text) {
+  fill: var(--ps-text-muted);
+  font-size: 10px;
+}
+
+.node {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 220px;
+  border: 1px solid var(--ps-border);
+  border-radius: 8px;
+  background: var(--ps-bg-raised);
+  color: var(--ps-text);
+  cursor: grab;
+}
+
+.node[data-selected] {
+  border-color: var(--ps-accent);
+}
+
+.node[data-context] {
+  box-shadow: 0 0 0 2px var(--ps-accent);
+}
+
+.node[data-dimmed] {
+  opacity: 0.25;
+}
+
+.nodeDot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.nodeId {
+  flex: none;
+  color: var(--ps-text-muted);
+  font-family: var(--ps-font-mono);
+  font-size: 0.9em;
+}
+
+.nodeTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.handle {
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--ps-accent);
+  background: var(--ps-bg-main);
+  opacity: 0;
+  transition: opacity var(--ps-fade);
+}
+
+.node:hover .handle,
+.node[data-selected] .handle {
+  opacity: 1;
+}
+
+.filterBar {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--ps-border);
+  border-radius: 8px;
+  background: var(--ps-bg-raised);
+}
+
+.selectionBar {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  transform: translateX(-50%);
+  border: 1px solid var(--ps-accent);
+  border-radius: 8px;
+  background: var(--ps-bg-raised);
+}
+
+.mergeForm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mutedText {
+  margin: 0;
+  color: var(--ps-text-muted);
+}
+
+.errorText {
+  margin: 0;
+  color: var(--ps-danger);
+}
