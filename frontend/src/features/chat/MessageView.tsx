@@ -8,6 +8,7 @@ import { useAblations } from '../ablation/hooks.ts'
 import { CardRefChip, CitationChip } from './CitationChip.tsx'
 import { errorText } from './errors.ts'
 import { markerLookup, remarkCitations, type MarkerInfo } from './citations.ts'
+import { codeComponents, rehypeCode } from '../../components/codeMarkdown.ts'
 import styles from './chat.module.css'
 
 const remarkPlugins = [remarkCitations]
@@ -23,6 +24,7 @@ export function AssistantText({ text, citations, onWhy, scores }: { text: string
   const components = useMemo(
     () =>
       ({
+        ...codeComponents,
         'cite-marker': ({ marker }: { marker?: string }) => {
           const m = marker ?? ''
           const info: MarkerInfo | undefined = lookup.get(m)
@@ -35,7 +37,7 @@ export function AssistantText({ text, citations, onWhy, scores }: { text: string
   )
   return (
     <div className={styles.markdown}>
-      <Markdown remarkPlugins={remarkPlugins} components={components}>
+      <Markdown remarkPlugins={remarkPlugins} rehypePlugins={rehypeCode} components={components}>
         {text}
       </Markdown>
     </div>

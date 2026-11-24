@@ -1,0 +1,21 @@
+.block { margin: 8px 0; overflow: hidden; border: 1px solid var(--ps-border); border-radius: 6px; background: var(--ps-bg-sidebar); }
+.head { display: flex; align-items: center; justify-content: space-between; padding: 2px 6px 2px 10px; border-bottom: 1px solid var(--ps-border); color: var(--ps-text-muted); font-size: 11px; }
+.lang { font-family: var(--ps-font-mono); text-transform: lowercase; }
+.copy { display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; border: 0; border-radius: 4px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.copy:hover, .copy:focus-visible { background: var(--ps-accent-muted); color: var(--ps-text); }
+.block .pre { margin: 0; padding: 8px 10px; overflow-x: auto; background: transparent; font-family: var(--ps-font-mono); font-size: 12.5px; line-height: 1.5; }
+.pre code { padding: 0; background: transparent; font-family: inherit; font-size: inherit; white-space: pre; }
+
+/* Token colours (dark, calm). */
+.pre :global(.hljs-comment), .pre :global(.hljs-quote) { color: #7f848e; font-style: italic; }
+.pre :global(.hljs-keyword), .pre :global(.hljs-selector-tag), .pre :global(.hljs-doctag) { color: #c678dd; }
+.pre :global(.hljs-string), .pre :global(.hljs-regexp), .pre :global(.hljs-addition) { color: #98c379; }
+.pre :global(.hljs-number), .pre :global(.hljs-literal), .pre :global(.hljs-symbol) { color: #d19a66; }
+.pre :global(.hljs-title), .pre :global(.hljs-title.function_), .pre :global(.hljs-section) { color: #61afef; }
+.pre :global(.hljs-title.class_), .pre :global(.hljs-type), .pre :global(.hljs-built_in) { color: #e5c07b; }
+.pre :global(.hljs-attr), .pre :global(.hljs-attribute), .pre :global(.hljs-variable), .pre :global(.hljs-template-variable) { color: #e06c75; }
+.pre :global(.hljs-meta), .pre :global(.hljs-selector-class), .pre :global(.hljs-selector-id) { color: #56b6c2; }
+.pre :global(.hljs-tag), .pre :global(.hljs-name) { color: #e06c75; }
+.pre :global(.hljs-deletion) { color: #e06c75; }
+.pre :global(.hljs-emphasis) { font-style: italic; }
+.pre :global(.hljs-strong) { font-weight: 600; }
