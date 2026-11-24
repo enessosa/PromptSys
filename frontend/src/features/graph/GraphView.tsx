@@ -22,7 +22,7 @@ import { EmptyState } from '../../components/EmptyState.tsx'
 import { PromptDialog } from '../../components/PromptDialog.tsx'
 import { Toast } from '../../components/Toast.tsx'
 import { makeTab, useWorkspace } from '../../state/workspace.ts'
-import { useArchiveCard, useCreateLink, useDeleteLink, useUpdateLink } from '../cards/hooks.ts'
+import { useArchiveCard, useCards, useCreateLink, useDeleteLink, useUpdateLink } from '../cards/hooks.ts'
 import { CardNode } from './CardNode.tsx'
 import { inFolder, matchesText, type GraphFilters } from './filters.ts'
 import type { CardFlowNode } from './nodeModel.ts'
@@ -33,6 +33,17 @@ import styles from './graph.module.css'
 
 const nodeTypes = { card: CardNode }
 const HOLD_TO_MERGE_MS = 600
+const FIT_OPTIONS = { padding: 0.2, maxZoom: 1 }
+
+type Side = 'top' | 'right' | 'bottom' | 'left'
+
+/** Picks the facing sides of two cards from their relative position (dominant axis wins). */
+function pickSides(from: { x: number; y: number }, to: { x: number; y: number }): [Side, Side] {
+  const dx = to.x - from.x
+  const dy = to.y - from.y
+  if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? ['right', 'left'] : ['left', 'right']
+  return dy >= 0 ? ['bottom', 'top'] : ['top', 'bottom']
+}
 
 export function GraphView() {
   const { data, isPending, error } = useGraph()
@@ -61,6 +72,8 @@ function buildNodes(data: GraphDto, prev: CardFlowNode[], plan: Map<number, { x:
         title: n.title,
         kind: n.kind,
         degree: n.degree,
+        origin: n.origin ?? null,
+        reviewStatus: n.reviewStatus ?? null,
         inContext: n.inContext ?? false,
         dimmed: false,
       },
@@ -101,6 +114,13 @@ function GraphCanvas({ data }: { data: GraphDto }) {
     persistPositions(fresh.map(([id, p]) => ({ id, ...p })))
   }, [plan, persistPositions])
 
+  // The layout is computed synchronously, but node sizes are measured after the first paint: fit again then.
+  const nodeCount = data.nodes.length
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => void fitView(FIT_OPTIONS))
+    return () => cancelAnimationFrame(frame)
+  }, [nodeCount, fitView])
+
   const [filters, setFilters] = useState<GraphFilters>({ kind: '', folder: '', text: '' })
   const [selectedEdge, setSelectedEdge] = useState<number | null>(null)
   const [menu, setMenu] = useState<{ x: number; y: number; link: Link } | null>(null)
@@ -126,6 +146,10 @@ function GraphCanvas({ data }: { data: GraphDto }) {
   const contextIds = useWorkspace((s) => (s.lastChatId === null ? undefined : s.chatContexts[s.lastChatId]?.items))
   const contextSet = useMemo(() => new Set((contextIds ?? []).filter((i) => i.state !== 'excluded').map((i) => i.cardId)), [contextIds])
 
+  // The graph endpoint may not report the review state; the card list does.
+  const cardList = useCards().data
+  const agentInfo = useMemo(() => new Map((cardList ?? []).filter((c) => c.origin).map((c) => [c.id, c])), [cardList])
+
   const shownNodes = useMemo(
     () =>
       nodes.map((n) => ({
@@ -133,27 +157,36 @@ function GraphCanvas({ data }: { data: GraphDto }) {
         hidden: !visibleIds.has(n.id),
         data: {
           ...n.data,
+          origin: n.data.origin ?? agentInfo.get(n.data.cardId)?.origin ?? null,
+          reviewStatus: n.data.reviewStatus ?? agentInfo.get(n.data.cardId)?.reviewStatus ?? null,
           inContext: n.data.inContext || contextSet.has(n.data.cardId),
           dimmed: !matchesText({ id: n.data.cardId, title: n.data.title }, filters.text),
         },
       })),
-    [nodes, visibleIds, filters.text, contextSet],
+    [nodes, visibleIds, filters.text, contextSet, agentInfo],
   )
 
   const edges = useMemo<Edge[]>(
     () =>
-      data.links.map((l) => ({
+      data.links.map((l) => {
+        const from = nodes.find((n) => n.id === String(l.sourceId))
+        const to = nodes.find((n) => n.id === String(l.targetId))
+        const [sourceHandle, targetHandle] = from && to ? pickSides(from.position, to.position) : ['right', 'left']
+        return {
         id: `l${l.id}`,
         source: String(l.sourceId),
         target: String(l.targetId),
+        sourceHandle,
+        targetHandle,
         label: l.label ?? undefined,
         selected: selectedEdge === l.id,
         hidden: !visibleIds.has(String(l.sourceId)) || !visibleIds.has(String(l.targetId)),
         markerEnd: l.kind === 'related' ? undefined : { type: MarkerType.ArrowClosed, width: 14, height: 14 },
         style: l.kind === 'contradicts' ? { strokeDasharray: '4 3' } : undefined,
         data: { link: l },
-      })),
-    [data.links, selectedEdge, visibleIds],
+        }
+      }),
+    [data.links, nodes, selectedEdge, visibleIds],
   )
 
   const selectedIds = nodes.filter((n) => n.selected && visibleIds.has(n.id)).map((n) => Number(n.id))
@@ -216,7 +249,7 @@ function GraphCanvas({ data }: { data: GraphDto }) {
     )
     setNodes((prev) => prev.map((n) => ({ ...n, position: all.get(n.data.cardId) ?? n.position })))
     persistPositions([...all].map(([id, p]) => ({ id, ...p })))
-    requestAnimationFrame(() => void fitView({ duration: 250 }))
+    requestAnimationFrame(() => void fitView({ ...FIT_OPTIONS, duration: 250 }))
   }
 
   const edgeMenu = (link: Link): MenuItem[] => [
@@ -255,7 +288,9 @@ function GraphCanvas({ data }: { data: GraphDto }) {
         }}
         onPaneClick={() => setSelectedEdge(null)}
         fitView
+        fitViewOptions={FIT_OPTIONS}
         minZoom={0.1}
+        maxZoom={2}
         proOptions={{ hideAttribution: true }}
         deleteKeyCode={null}
         multiSelectionKeyCode={['Meta', 'Control', 'Shift']}

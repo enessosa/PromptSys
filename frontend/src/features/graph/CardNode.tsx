@@ -16,11 +16,22 @@ export function CardNode({ data, selected }: NodeProps<CardFlowNode>) {
         data-dimmed={data.dimmed || undefined}
         style={{ fontSize: `${12 * scale}px`, padding: `${5 * scale}px ${9 * scale}px` }}
       >
-        <Handle type="source" position={Position.Left} className={styles.handle} />
+        <Handle id="top" type="source" position={Position.Top} className={styles.handle} />
+        <Handle id="left" type="source" position={Position.Left} className={styles.handle} />
         <span className={styles.nodeDot} style={{ background: KIND_COLORS[data.kind] }} />
+        {data.origin === 'agent' && (
+          <span
+            className={styles.agentMark}
+            data-review={data.reviewStatus ?? 'proposed'}
+            role="img"
+            aria-label={`Agent card, ${data.reviewStatus ?? 'proposed'}`}
+            title={`Recorded by the agent · ${data.reviewStatus ?? 'proposed'}`}
+          />
+        )}
         <span className={styles.nodeId}>{cardLabel(data.cardId)}</span>
         <span className={styles.nodeTitle}>{data.title}</span>
-        <Handle type="source" position={Position.Right} className={styles.handle} />
+        <Handle id="right" type="source" position={Position.Right} className={styles.handle} />
+        <Handle id="bottom" type="source" position={Position.Bottom} className={styles.handle} />
       </div>
     </HoverCard>
   )

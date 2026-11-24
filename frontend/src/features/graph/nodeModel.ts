@@ -1,11 +1,14 @@
 import type { Node } from '@xyflow/react'
-import type { CardKind } from '../../api/types.ts'
+import type { CardKind, CardOrigin, ReviewStatus } from '../../api/types.ts'
 
 export type CardNodeData = {
   cardId: number
   title: string
   kind: CardKind
   degree: number
+  /** Recorded by the coding agent; shown as a small marker with the review status. */
+  origin?: CardOrigin | null
+  reviewStatus?: ReviewStatus | null
   /** Card is part of the active conversation context (accent ring); set once chat reports it. */
   inContext: boolean
   /** Does not match the text filter. */
