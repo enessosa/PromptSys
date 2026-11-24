@@ -57,7 +57,8 @@ export function backendEnv(input: {
     FRONTEND_DIST: input.frontendDist,
     EMBEDDING_CACHE_DIR: input.paths.modelsDir,
   }
-  for (const name of ['PATH', 'HOME', 'USERPROFILE', 'TMPDIR', 'TEMP', 'TMP', 'SystemRoot', 'LANG', 'ANTHROPIC_MODEL', 'HTTPS_PROXY', 'HTTP_PROXY', 'NO_PROXY']) {
+  // USER/LOGNAME: Claude Code (code mode) finds the user's login in the macOS keychain by user name.
+  for (const name of ['PATH', 'HOME', 'USER', 'LOGNAME', 'CLAUDE_CONFIG_DIR', 'USERPROFILE', 'TMPDIR', 'TEMP', 'TMP', 'SystemRoot', 'LANG', 'ANTHROPIC_MODEL', 'HTTPS_PROXY', 'HTTP_PROXY', 'NO_PROXY']) {
     const value = input.parentEnv[name]
     if (value) env[name] = value
   }

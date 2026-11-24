@@ -148,6 +148,11 @@ function registerIpc(): void {
     if (!fromWindow(event, mainWindow) || !isAppUrl(event.senderFrame?.url ?? '', port)) return
     openSettings()
   })
+  ipcMain.handle('app:choose-folder', async (event) => {
+    if (!fromWindow(event, mainWindow) || !isAppUrl(event.senderFrame?.url ?? '', port) || !mainWindow) return null
+    const result = await dialog.showOpenDialog(mainWindow, { title: 'Choose project folder', properties: ['openDirectory', 'createDirectory'] })
+    return result.canceled ? null : (result.filePaths[0] ?? null)
+  })
   ipcMain.handle('settings:status', (event) => {
     if (!fromWindow(event, settingsWindow)) throw new Error('forbidden')
     return { available: keyStore.isAvailable(), hasKey: keyStore.has(), backendRunning: backend.isAlive() }

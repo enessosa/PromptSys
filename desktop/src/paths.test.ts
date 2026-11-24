@@ -19,9 +19,9 @@ describe('paths', () => {
       paths: dataPaths('/data'),
       frontendDist: '/fe',
       apiKey: 'k',
-      parentEnv: { PATH: '/bin', ANTHROPIC_API_KEY: 'stray', SECRET: 'x', PORT: '9' },
+      parentEnv: { PATH: '/bin', USER: 'enes', ANTHROPIC_API_KEY: 'stray', SECRET: 'x', PORT: '9' },
     })
-    expect(env).toMatchObject({ NODE_ENV: 'production', PORT: '47800', DB_URL: join('/', 'data', 'promptsys.db'), FRONTEND_DIST: '/fe', EMBEDDING_CACHE_DIR: join('/', 'data', 'models'), PATH: '/bin', ANTHROPIC_API_KEY: 'k' })
+    expect(env).toMatchObject({ NODE_ENV: 'production', PORT: '47800', DB_URL: join('/', 'data', 'promptsys.db'), FRONTEND_DIST: '/fe', EMBEDDING_CACHE_DIR: join('/', 'data', 'models'), PATH: '/bin', USER: 'enes', ANTHROPIC_API_KEY: 'k' })
     expect(env.SECRET).toBeUndefined()
   })
 

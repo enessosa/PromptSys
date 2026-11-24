@@ -7,4 +7,6 @@ contextBridge.exposeInMainWorld('promptsys', {
   platform: process.platform,
   /** Opens the settings window (API key). */
   openSettings: (): Promise<void> => ipcRenderer.invoke('app:open-settings'),
+  /** Native folder picker (Finder/Explorer); resolves to the absolute path or null when cancelled. */
+  chooseFolder: (): Promise<string | null> => ipcRenderer.invoke('app:choose-folder'),
 })
