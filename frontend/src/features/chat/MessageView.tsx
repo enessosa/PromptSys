@@ -8,10 +8,11 @@ import { useAblations } from '../ablation/hooks.ts'
 import { CardRefChip, CitationChip } from './CitationChip.tsx'
 import { errorText } from './errors.ts'
 import { markerLookup, remarkCitations, type MarkerInfo } from './citations.ts'
-import { codeComponents, rehypeCode } from '../../components/codeMarkdown.ts'
+import { codeComponents, rehypeCode, remarkMarkdown } from '../../components/codeMarkdown.ts'
+import prose from '../../components/prose.module.css'
 import styles from './chat.module.css'
 
-const remarkPlugins = [remarkCitations]
+const remarkPlugins = [...remarkMarkdown, remarkCitations]
 
 /** Assistant text as Markdown; `[cN]` becomes a chip, valid or not as the backend resolved it. */
 export type ChipExtras = {
@@ -36,7 +37,7 @@ export function AssistantText({ text, citations, onWhy, scores }: { text: string
     [lookup, onWhy, scores],
   )
   return (
-    <div className={styles.markdown}>
+    <div className={`${styles.markdown} ${prose.prose}`}>
       <Markdown remarkPlugins={remarkPlugins} rehypePlugins={rehypeCode} components={components}>
         {text}
       </Markdown>

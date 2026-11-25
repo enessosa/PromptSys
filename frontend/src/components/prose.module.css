@@ -1,0 +1,27 @@
+/* Readable Markdown for chat answers and agent text: spacing, lists, headings, tables, quotes. */
+.prose { line-height: 1.6; overflow-wrap: anywhere; }
+.prose > :first-child { margin-top: 0; }
+.prose > :last-child { margin-bottom: 0; }
+.prose p { margin: 0 0 10px; }
+.prose h1, .prose h2, .prose h3, .prose h4 { margin: 18px 0 8px; line-height: 1.3; font-weight: 600; }
+.prose h1 { font-size: 1.3em; }
+.prose h2 { font-size: 1.18em; }
+.prose h3 { font-size: 1.06em; }
+.prose h4 { font-size: 1em; color: var(--ps-text-muted); }
+.prose ul, .prose ol { margin: 0 0 10px; padding-left: 22px; }
+.prose li { margin: 3px 0; }
+.prose li > p { margin: 0 0 4px; }
+.prose li::marker { color: var(--ps-text-muted); }
+.prose blockquote { margin: 0 0 10px; padding: 2px 12px; border-left: 3px solid var(--ps-border); color: var(--ps-text-muted); }
+.prose hr { margin: 14px 0; border: 0; border-top: 1px solid var(--ps-border); }
+.prose a { color: var(--ps-accent); }
+.prose :not(pre) > code { padding: 1px 5px; border-radius: 4px; background: var(--ps-bg-sidebar); font-family: var(--ps-font-mono); font-size: 0.88em; }
+.prose strong { font-weight: 600; }
+
+/* Tables scroll on their own instead of widening the message. */
+.prose table { display: block; max-width: 100%; margin: 0 0 12px; overflow-x: auto; border-collapse: collapse; font-size: 0.94em; }
+.prose th, .prose td { padding: 6px 10px; border: 1px solid var(--ps-border); text-align: left; vertical-align: top; overflow-wrap: normal; }
+.prose th { background: var(--ps-bg-sidebar); font-weight: 600; white-space: nowrap; }
+.prose tr:nth-child(even) td { background: color-mix(in srgb, var(--ps-bg-sidebar) 45%, transparent); }
+.prose input[type='checkbox'] { margin: 0 6px 0 0; vertical-align: middle; }
+.prose li:has(> input[type='checkbox']) { list-style: none; margin-left: -18px; }

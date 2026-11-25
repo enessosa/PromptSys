@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import Markdown from 'react-markdown'
-import { codeComponents, rehypeCode } from '../../components/codeMarkdown.ts'
+import { codeComponents, rehypeCode, remarkMarkdown } from '../../components/codeMarkdown.ts'
+import prose from '../../components/prose.module.css'
 import { ChevronDownIcon, ChevronRightIcon } from '@primer/octicons-react'
 import type { AgentEntry, AgentStatus } from './model.ts'
 import { ToolRow } from './Timeline.tsx'
@@ -47,8 +48,8 @@ function AgentRow({ agent, open, onToggle }: { agent: AgentEntry; open: boolean;
           <ol className={styles.agentItems} aria-label="Agent activity">
             {agent.items.map((item) =>
               item.kind === 'text' ? (
-                <li key={item.key} className={styles.text}>
-                  <Markdown rehypePlugins={rehypeCode} components={codeComponents}>{item.text}</Markdown>
+                <li key={item.key} className={`${styles.text} ${prose.prose}`}>
+                  <Markdown remarkPlugins={remarkMarkdown} rehypePlugins={rehypeCode} components={codeComponents}>{item.text}</Markdown>
                 </li>
               ) : (
                 <ToolRow key={item.key} item={item} compact onApproval={noApproval} approvalBusy={false} />
