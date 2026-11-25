@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
-import { useWorkspace } from '../state/workspace.ts'
+import { selectActiveTab, useWorkspace } from '../state/workspace.ts'
 import { mockFetch, renderWithProviders, sampleCards } from '../test/utils.tsx'
 import { Shell } from './Shell.tsx'
 
@@ -32,7 +32,7 @@ describe('Shell', () => {
     expect(await screen.findByText('No API key')).toBeInTheDocument()
   })
 
-  it('opens the palette with Ctrl+K and a card tab from the tree', async () => {
+  it('opens the palette with Ctrl+K, and a card from the tree without a tab bar', async () => {
     const user = userEvent.setup()
     renderWithProviders(
       <MemoryRouter>
@@ -42,8 +42,8 @@ describe('Shell', () => {
     await user.keyboard('{Control>}k{/Control}')
     expect(await screen.findByPlaceholderText(/Search cards/)).toBeInTheDocument()
     await user.keyboard('{Escape}')
-    await user.dblClick(await screen.findByText('Gamma'))
-    expect(await screen.findByRole('tab', { name: /c3/ })).toBeInTheDocument()
+    await user.click(await screen.findByText('Gamma'))
+    expect(selectActiveTab(useWorkspace.getState())?.id).toBe('card:3')
   })
 
   it('shows one offline state when the backend is unreachable and recovers when it is back', async () => {

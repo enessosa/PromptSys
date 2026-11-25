@@ -46,7 +46,7 @@ export function useCommands(): PaletteCommand[] {
           s.openMerge(s.graphSelection)
         },
       },
-      { id: 'close-tab', title: 'Close tab', shortcut: 'Mod+W', run: s.closeActiveTab },
+      { id: 'close-tab', title: 'Close view', shortcut: 'Mod+W', run: s.closeActiveTab },
     ],
     // The store object changes on every update, which is what keeps `enabled` current.
     [s, createCard, newConversation, openBranchView, activeCard],

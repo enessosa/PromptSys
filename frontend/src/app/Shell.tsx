@@ -11,8 +11,6 @@ import {
   SearchIcon,
   SidebarCollapseIcon,
   SidebarExpandIcon,
-  XIcon,
-  ColumnsIcon,
 } from '@primer/octicons-react'
 import { Button } from '@primer/react'
 import { EmptyState } from '../components/EmptyState.tsx'
@@ -40,8 +38,7 @@ import { MergeToast } from '../features/graph/MergeToast.tsx'
 import { CommandPalette } from '../features/palette/CommandPalette.tsx'
 import { useOpenBranchView } from '../features/branches/useOpenBranchView.ts'
 import { useCommands, useGlobalShortcuts } from '../features/palette/useCommands.ts'
-import { makeTab, selectActiveTab, useWorkspace, type Pane, type Tab } from '../state/workspace.ts'
-import { useTabTitle } from './useTabTitle.ts'
+import { makeTab, selectActiveTab, useWorkspace, type Tab } from '../state/workspace.ts'
 import { useUrlTabSync } from './routes.tsx'
 import styles from './Shell.module.css'
 
@@ -76,7 +73,7 @@ export function Shell() {
           )}
           <Panel id="main" minSize="320px">
             <div style={{ position: 'relative', height: '100%' }}>
-              <TabArea />
+              <MainView />
               <OfflineOverlay />
             </div>
           </Panel>
@@ -137,100 +134,15 @@ function Ribbon() {
   )
 }
 
-function TabArea() {
-  const panes = useWorkspace((s) => s.panes)
+/** The one view that is shown; the sidebar (and the command palette) decides what it is. */
+function MainView() {
+  const active = useWorkspace(selectActiveTab)
   return (
-    <Group orientation="horizontal" id="panes" className={styles.main}>
-      {panes.map((pane, i) => (
-        <PaneSlot key={i} index={i} pane={pane} multi={panes.length > 1} last={i === panes.length - 1} />
-      ))}
-    </Group>
-  )
-}
-
-function PaneSlot({ index, pane, multi, last }: { index: number; pane: Pane; multi: boolean; last: boolean }) {
-  return (
-    <>
-      <Panel id={`pane-${index}`} minSize="240px">
-        <PaneView index={index} pane={pane} multi={multi} />
-      </Panel>
-      {multi && !last && <Separator className={styles.separator} />}
-    </>
-  )
-}
-
-const TAB_DRAG = 'application/x-promptsys-tab'
-
-function PaneView({ index, pane, multi }: { index: number; pane: Pane; multi: boolean }) {
-  const activePane = useWorkspace((s) => s.activePane)
-  const setActivePane = useWorkspace((s) => s.setActivePane)
-  const activateTab = useWorkspace((s) => s.activateTab)
-  const closeTab = useWorkspace((s) => s.closeTab)
-  const moveTab = useWorkspace((s) => s.moveTab)
-  const openTab = useWorkspace((s) => s.openTab)
-  const active = pane.tabs.find((t) => t.id === pane.activeTabId)
-
-  return (
-    <section
-      className={styles.pane}
-      data-active={activePane === index}
-      data-multi={multi}
-      aria-label={`Pane ${index + 1}`}
-      onMouseDown={() => setActivePane(index)}
-      onDragOver={(e) => e.dataTransfer.types.includes(TAB_DRAG) && e.preventDefault()}
-      onDrop={(e) => {
-        const id = e.dataTransfer.getData(TAB_DRAG)
-        if (id) moveTab(id, index)
-      }}
-    >
-      <div className={styles.tabs} role="tablist">
-        {pane.tabs.map((tab) => (
-          <TabButton
-            key={tab.id}
-            tab={tab}
-            active={tab.id === pane.activeTabId}
-            onSelect={() => activateTab(tab.id)}
-            onPin={() => openTab(tab)}
-            onClose={() => closeTab(tab.id)}
-          />
-        ))}
-        <div className={styles.tools}>
-          {!multi && active && (
-            <IconButton
-              icon={ColumnsIcon}
-              size="small"
-              variant="invisible"
-              aria-label="Move tab to second pane"
-              onClick={() => moveTab(active.id, 1)}
-            />
-          )}
-        </div>
-      </div>
-      <div className={styles.content} role="tabpanel">
-        {active ? <TabContent tab={active} /> : <EmptyState title="Nothing open">Pick a card in the sidebar, or press {'Ctrl/Cmd+K'}.</EmptyState>}
+    <section className={styles.pane} aria-label="Main view">
+      <div className={styles.content}>
+        {active ? <TabContent tab={active} /> : <EmptyState title="Nothing open">Pick a chat, a card or the graph in the sidebar, or press {'Ctrl/Cmd+K'}.</EmptyState>}
       </div>
     </section>
-  )
-}
-
-function TabButton({ tab, active, onSelect, onPin, onClose }: { tab: Tab; active: boolean; onSelect: () => void; onPin: () => void; onClose: () => void }) {
-  const title = useTabTitle(tab)
-  return (
-    <div
-      className={styles.tab}
-      role="tab"
-      aria-selected={active}
-      data-active={active}
-      data-preview={tab.preview || undefined}
-      draggable
-      onDragStart={(e) => e.dataTransfer.setData(TAB_DRAG, tab.id)}
-      onClick={onSelect}
-      onDoubleClick={onPin}
-      onAuxClick={(e) => e.button === 1 && onClose()}
-    >
-      <span className={styles.tabTitle}>{title}</span>
-      <IconButton icon={XIcon} size="small" variant="invisible" aria-label={`Close ${title}`} onClick={(e) => { e.stopPropagation(); onClose() }} />
-    </div>
   )
 }
 

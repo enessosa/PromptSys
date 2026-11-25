@@ -81,7 +81,6 @@ export type WorkspaceState = {
   closeTab: (tabId: string) => void
   closeActiveTab: () => void
   activateTab: (tabId: string) => void
-  moveTab: (tabId: string, toPane: number) => void
   setActivePane: (pane: number) => void
   toggleSidebar: () => void
   toggleInspector: () => void
@@ -169,35 +168,9 @@ export const useWorkspace = create<WorkspaceState>()(
       why: null,
       expectedCalls: null,
 
-      openTab: (tab, options = {}) => {
-        const { panes, activePane } = get()
-        const existing = findTab(panes, tab.id)
-        if (existing) {
-          const next = panes.map((p, i) => {
-            if (i !== existing.pane) return p
-            return {
-              ...p,
-              activeTabId: tab.id,
-              // opening permanently (double click) promotes a preview tab
-              tabs: p.tabs.map((t) => (t.id === tab.id && !options.preview ? { ...t, preview: false } : t)),
-            }
-          })
-          set({ panes: next, activePane: existing.pane })
-          return
-        }
-        let target = options.pane ?? activePane
-        let base = panes
-        if (target >= base.length) {
-          if (base.length < MAX_PANES) base = [...base, { tabs: [], activeTabId: null }]
-          target = base.length - 1
-        }
-        const newTab: Tab = { ...tab, preview: options.preview ? true : undefined }
-        const next = base.map((p, i) => {
-          if (i !== target) return p
-          const tabs = options.preview ? p.tabs.filter((t) => !t.preview) : p.tabs
-          return { tabs: [...tabs, newTab], activeTabId: tab.id }
-        })
-        set({ panes: next, activePane: target })
+      // One view at a time: the sidebar navigates, opening something replaces what is shown (no tab bar, no second pane).
+      openTab: (tab) => {
+        set({ panes: [{ tabs: [{ ...tab, preview: undefined }], activeTabId: tab.id }], activePane: 0 })
       },
 
       closeTab: (tabId) => {
@@ -230,31 +203,6 @@ export const useWorkspace = create<WorkspaceState>()(
         })
       },
 
-      moveTab: (tabId, toPane) => {
-        const { panes } = get()
-        const found = findTab(panes, tabId)
-        if (!found || found.pane === toPane) return
-        let base = panes
-        if (toPane >= base.length) {
-          if (base.length >= MAX_PANES) return
-          base = [...base, { tabs: [], activeTabId: null }]
-          toPane = base.length - 1
-        }
-        const moved = { ...found.tab, preview: undefined }
-        const next = base.map((p, i) => {
-          if (i === found.pane) {
-            const idx = p.tabs.findIndex((t) => t.id === tabId)
-            const tabs = p.tabs.filter((t) => t.id !== tabId)
-            return { tabs, activeTabId: p.activeTabId === tabId ? pickActive({ ...p, tabs }, idx) : p.activeTabId }
-          }
-          if (i === toPane) return { tabs: [...p.tabs, moved], activeTabId: tabId }
-          return p
-        })
-        // `toPane` may shift when the source pane disappears, so look it up again.
-        const normalized = normalize(next, toPane)
-        const activePane = normalized.panes.findIndex((p) => p.activeTabId === tabId)
-        set({ ...normalized, activePane: activePane === -1 ? normalized.activePane : activePane })
-      },
 
       setActivePane: (pane) => set((s) => (pane < s.panes.length ? { activePane: pane } : s)),
       toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
@@ -314,7 +262,15 @@ export const useWorkspace = create<WorkspaceState>()(
     }),
     {
       name: 'promptsys.workspace',
-      version: 1,
+      version: 2,
+      // Version 1 kept several tabs and panes; only the view that was shown survives.
+      migrate: (persisted, version) => {
+        const state = (persisted ?? {}) as { panes?: Pane[]; activePane?: number }
+        if (version >= 2 || !state.panes) return state as never
+        const pane = state.panes[state.activePane ?? 0] ?? state.panes[0]
+        const tab = pane?.tabs.find((t) => t.id === pane.activeTabId)
+        return { ...state, panes: [{ tabs: tab ? [tab] : [], activeTabId: tab?.id ?? null }], activePane: 0 } as never
+      },
       storage: createJSONStorage(() => safeStorage),
       partialize: (s) => ({
         panes: s.panes,

@@ -114,7 +114,7 @@ export function PaletteBody({ commands, onClose }: { commands: PaletteCommand[];
               </Command.Group>
             )}
           </Command.List>
-          <div className={styles.hint}>Enter opens · {formatShortcut('Mod+')}Enter opens in second pane · Esc closes</div>
+          <div className={styles.hint}>Enter opens · Esc closes</div>
         </Command>
       </div>
     </div>

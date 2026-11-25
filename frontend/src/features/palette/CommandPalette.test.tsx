@@ -35,7 +35,7 @@ describe('PaletteBody', () => {
     expect(onClose).toHaveBeenCalled()
   })
 
-  it('opens a card found by title, and uses the second pane with Ctrl+Enter', async () => {
+  it('opens a card found by title', async () => {
     mockFetch({
       'GET /api/search': { status: 404, body: { error: { code: 'not_found', message: 'x' } } },
       'GET /api/cards': { body: [sampleCards[2]] },
@@ -44,8 +44,7 @@ describe('PaletteBody', () => {
     renderWithProviders(<PaletteBody commands={[]} onClose={() => {}} />)
     await user.type(screen.getByPlaceholderText(/Search cards/), 'gamma')
     await screen.findByText('Gamma')
-    await user.keyboard('{Control>}{Enter}{/Control}')
+    await user.keyboard('{Enter}')
     expect(selectActiveTab(useWorkspace.getState())?.id).toBe('card:3')
-    expect(useWorkspace.getState().activePane).toBe(1)
   })
 })

@@ -17,58 +17,32 @@ describe('workspace store', () => {
     expect(tabPath(makeTab('graph'))).toBe('/graph')
   })
 
-  it('opens each tab once and activates it', () => {
+  it('shows one view at a time: opening replaces what is shown', () => {
     const s = useWorkspace.getState()
     s.openTab(makeTab('card', 1))
-    s.openTab(makeTab('graph'))
-    s.openTab(makeTab('card', 1))
-    expect(ids()).toEqual([['card:1', 'graph']])
+    s.openTab(makeTab('graph'), { preview: true })
+    expect(ids()).toEqual([['graph']])
+    s.openTab(makeTab('card', 1), { pane: 1 })
+    expect(ids()).toEqual([['card:1']])
     expect(selectActiveTab(useWorkspace.getState())?.id).toBe('card:1')
+    expect(useWorkspace.getState().panes[0].tabs[0].preview).toBeUndefined()
   })
 
-  it('replaces a preview tab by the next preview and promotes it on permanent open', () => {
-    const s = useWorkspace.getState()
-    s.openTab(makeTab('card', 1), { preview: true })
-    s.openTab(makeTab('card', 2), { preview: true })
-    expect(ids()).toEqual([['card:2']])
-    s.openTab(makeTab('card', 2))
-    expect(useWorkspace.getState().panes[0].tabs[0].preview).toBe(false)
-    s.openTab(makeTab('card', 3), { preview: true })
-    expect(ids()).toEqual([['card:2', 'card:3']])
-  })
-
-  it('closes a tab and activates a neighbour', () => {
+  it('closes the view', () => {
     const s = useWorkspace.getState()
     s.openTab(makeTab('card', 1))
-    s.openTab(makeTab('card', 2))
-    s.openTab(makeTab('card', 3))
-    s.closeTab('card:3')
-    expect(selectActiveTab(useWorkspace.getState())?.id).toBe('card:2')
-    s.closeActiveTab()
     s.closeActiveTab()
     expect(selectActiveTab(useWorkspace.getState())).toBeNull()
   })
 
-  it('supports at most two panes and drops an emptied second pane', () => {
-    const s = useWorkspace.getState()
-    s.openTab(makeTab('card', 1))
-    s.openTab(makeTab('graph'))
-    s.moveTab('graph', 1)
-    expect(ids()).toEqual([['card:1'], ['graph']])
-    expect(useWorkspace.getState().activePane).toBe(1)
-    s.openTab(makeTab('card', 5), { pane: 2 })
-    expect(useWorkspace.getState().panes).toHaveLength(2)
-    s.closeTab('graph')
-    s.closeTab('card:5')
-    expect(useWorkspace.getState().panes).toHaveLength(1)
-  })
-
-  it('moves tabs back to the first pane and removes the empty pane', () => {
-    const s = useWorkspace.getState()
-    s.openTab(makeTab('card', 1))
-    s.openTab(makeTab('graph'), { pane: 1 })
-    s.moveTab('graph', 0)
-    expect(ids()).toEqual([['card:1', 'graph']])
+  it('keeps only the shown view from an old layout with several tabs and panes', async () => {
+    localStorage.setItem(
+      'promptsys.workspace',
+      JSON.stringify({ version: 1, state: { panes: [{ tabs: [makeTab('card', 1), makeTab('graph')], activeTabId: 'card:1' }, { tabs: [makeTab('chat', 2)], activeTabId: 'chat:2' }], activePane: 1 } }),
+    )
+    await useWorkspace.persist.rehydrate()
+    expect(ids()).toEqual([['chat:2']])
+    expect(useWorkspace.getState().activePane).toBe(0)
   })
 
   it('toggles sidebar and inspector', () => {

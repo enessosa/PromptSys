@@ -23,13 +23,12 @@ describe('CardTree', () => {
     expect(screen.getByText('Gamma')).toBeInTheDocument()
   })
 
-  it('opens a preview tab on click and a permanent tab on double click', async () => {
+  it('opens a card with one click, replacing the shown view', async () => {
     const user = userEvent.setup()
     renderWithProviders(<CardTree />)
     await user.click(await screen.findByText('Beta notes'))
-    expect(selectActiveTab(useWorkspace.getState())).toMatchObject({ id: 'card:2', preview: true })
-    await user.dblClick(screen.getByText('Beta notes'))
-    expect(useWorkspace.getState().panes[0].tabs[0].preview).toBe(false)
+    expect(selectActiveTab(useWorkspace.getState())?.id).toBe('card:2')
+    expect(useWorkspace.getState().panes[0].tabs).toHaveLength(1)
   })
 
   it('collapses a folder', async () => {

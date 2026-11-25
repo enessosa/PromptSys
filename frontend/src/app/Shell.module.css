@@ -82,54 +82,6 @@
   background: var(--ps-bg-main);
 }
 
-.pane[data-active='true'][data-multi='true'] .tabs {
-  box-shadow: inset 0 -1px 0 var(--ps-accent);
-}
-
-.tabs {
-  display: flex;
-  flex: none;
-  align-items: stretch;
-  overflow-x: auto;
-  border-bottom: 1px solid var(--ps-border);
-  background: var(--ps-bg-sidebar);
-}
-
-.tab {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  max-width: 200px;
-  padding: 0 6px 0 12px;
-  height: 32px;
-  border-right: 1px solid var(--ps-border);
-  color: var(--ps-text-muted);
-  cursor: pointer;
-  user-select: none;
-  white-space: nowrap;
-}
-
-.tab[data-active='true'] {
-  background: var(--ps-bg-main);
-  color: var(--ps-text);
-}
-
-.tab[data-preview='true'] .tabTitle {
-  font-style: italic;
-}
-
-.tabTitle {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.tabs .tools {
-  display: flex;
-  align-items: center;
-  margin-left: auto;
-  padding: 0 4px;
-}
-
 .content {
   flex: 1;
   min-height: 0;

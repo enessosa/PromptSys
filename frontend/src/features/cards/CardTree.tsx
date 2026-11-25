@@ -72,7 +72,6 @@ export function CardTree() {
 
   const menuItems = (card: CardSummary): MenuItem[] => [
     { label: 'Open', onSelect: () => open(card, false) },
-    { label: 'Open in second pane', onSelect: () => openTab(makeTab('card', card.id), { pane: 1 }) },
     { separator: true },
     { label: 'Rename…', onSelect: () => setDialog({ kind: 'rename', card }) },
     { label: 'Move to folder…', onSelect: () => setDialog({ kind: 'move', card }) },
