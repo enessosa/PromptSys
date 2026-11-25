@@ -35,6 +35,18 @@ export function createFakeRunner(): AgentRunner {
           yield { type: 'text', text: 'Edit was denied' }
         }
       }
+      if (typed.includes('question')) {
+        const question = 'Which database should we use?'
+        const toolInput = { questions: [{ question, header: 'Database', multiSelect: false, options: [{ label: 'SQLite', description: 'One file' }, { label: 'Postgres', description: 'A server' }] }] }
+        const answer = await input.approve({ toolName: 'AskUserQuestion', input: toolInput })
+        if (input.signal.aborted) return
+        yield { type: 'text', text: answer.allow ? `You chose: ${answer.answers?.[question] ?? '(nothing)'}` : 'No answer' }
+      }
+      if (typed.includes('plan')) {
+        const answer = await input.approve({ toolName: 'ExitPlanMode', input: { plan: '1. Add the table\n2. Write the test' } })
+        if (input.signal.aborted) return
+        yield { type: 'text', text: answer.allow ? `Plan approved, mode ${input.getPermissionMode()}` : `Keep planning: ${answer.message ?? ''}` }
+      }
       if (typed.includes('agent')) {
         const input = { description: 'Explore the repo', subagent_type: 'Explore', prompt: 'Find the build scripts' }
         yield { type: 'tool_call', id: 'fake-agent-1', name: 'Agent', input }

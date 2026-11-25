@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cardMatches, cardMention, splitCardRefs, isPath, applyEvent, contextBar, formatTokens, emptyState, folderName, fromRecord, nextMode, replay, slashCommandsIn, slashMatches, summarizeResult, type CodeEvent } from './model.ts'
+import { answerOf, parseQuestions, cardMatches, cardMention, splitCardRefs, isPath, applyEvent, contextBar, formatTokens, emptyState, folderName, fromRecord, nextMode, replay, slashCommandsIn, slashMatches, summarizeResult, type CodeEvent } from './model.ts'
 
 const ev = (seq: number, type: string, rest: Record<string, unknown> = {}): CodeEvent => ({ seq, type, ...rest })
 
@@ -169,5 +169,31 @@ describe('card references', () => {
   })
   it('splits [cN] references out of a message', () => {
     expect(splitCardRefs('use [c3] and [c12].')).toEqual(['use ', { cardId: 3 }, ' and ', { cardId: 12 }, '.'])
+  })
+})
+
+describe('questions and queue', () => {
+  it('builds answers from picked options and free text', () => {
+    expect(answerOf({ picked: ['A'], other: '', otherOn: false }, false)).toBe('A')
+    expect(answerOf({ picked: [], other: ' mine ', otherOn: true }, false)).toBe('mine')
+    expect(answerOf({ picked: ['A', 'B'], other: 'C', otherOn: true }, true)).toBe('A, B, C')
+    expect(answerOf({ picked: [], other: '', otherOn: true }, true)).toBe('')
+  })
+
+  it('parses questions and drops malformed ones', () => {
+    expect(parseQuestions({ questions: [{ question: 'Q?', header: 'H', options: [{ label: 'x' }, { nope: 1 }] }, { header: 'no question' }] })).toEqual([
+      { question: 'Q?', header: 'H', multiSelect: false, options: [{ label: 'x', description: '' }] },
+    ])
+    expect(parseQuestions(null)).toEqual([])
+  })
+
+  it('keeps the latest queue and the answers of a resolved approval', () => {
+    let s = applyEvent(emptyState(), { seq: 1, type: 'queue', items: [{ id: 'a', text: 'one' }, { bad: true }] })
+    expect(s.queue).toEqual([{ id: 'a', text: 'one' }])
+    s = applyEvent(s, { seq: 2, type: 'queue', items: [] })
+    expect(s.queue).toEqual([])
+    s = applyEvent(s, { seq: 3, type: 'approval_request', approvalId: 'x', toolName: 'AskUserQuestion', input: {} })
+    s = applyEvent(s, { seq: 4, type: 'approval_resolved', approvalId: 'x', allow: true, answers: { 'Q?': 'A' } })
+    expect(s.items[0]).toMatchObject({ approval: { approvalId: 'x', allow: true, answers: { 'Q?': 'A' } } })
   })
 })

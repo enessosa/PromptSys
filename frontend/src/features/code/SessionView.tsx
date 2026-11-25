@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from 'react'
 import { Button, Textarea } from '@primer/react'
-import { DiffIcon, SidebarExpandIcon, SquareFillIcon } from '@primer/octicons-react'
+import { DiffIcon, SidebarExpandIcon, SquareFillIcon, XIcon } from '@primer/octicons-react'
 import { ApiError } from '../../api/client.ts'
 import { EmptyState } from '../../components/EmptyState.tsx'
 import { ChangesPanel } from './ChangesPanel.tsx'
-import { useCodeSession, useCodeStatus, useGitInfo, useResolveApproval, useSendMessage, useSetPermissionMode, useStopSession } from './hooks.ts'
+import { useCodeSession, useCodeStatus, useGitInfo, useRemoveQueued, useResolveApproval, useSendMessage, useSetPermissionMode, useStopSession } from './hooks.ts'
 import { ModeSwitch } from './ModeSwitch.tsx'
 import { useCards } from '../cards/hooks.ts'
 import { cardMatches, cardMention, formatCost, nextMode, slashMatches, STATUS_LABEL } from './model.ts'
@@ -64,6 +64,7 @@ function SessionBody({ sessionId, title, projectPath, state, setMode, showCost }
   const send = useSendMessage(sessionId)
   const approve = useResolveApproval(sessionId)
   const stop = useStopSession(sessionId)
+  const unqueue = useRemoveQueued(sessionId)
   const [draft, setDraft] = useState('')
   const [panel, setPanel] = useState(true)
   const [changesOpen, setChangesOpen] = useState(() => loadChangesOpen(sessionId))
@@ -133,15 +134,42 @@ function SessionBody({ sessionId, title, projectPath, state, setMode, showCost }
     permission.mutate(mode, { onError: () => setMode(before) })
   }
 
+  /** While the agent works, the message is queued (like in the terminal) and runs when the turn ends. */
   const submit = () => {
     const text = draft.trim()
-    if (!text || busy || send.isPending) return
+    if (!text || send.isPending) return
     setError(null)
     send.mutate(text, {
       onSuccess: () => setDraft(''),
-      onError: (e) => setError(e instanceof ApiError && e.code === 'session_busy' ? 'The agent is still working on the previous message.' : e.message),
+      onError: (e) => setError(e instanceof ApiError && e.code === 'queue_full' ? 'Too many messages are waiting; remove one or wait for the agent.' : e.message),
     })
   }
+
+  /** Esc interrupts, like in the terminal; queued messages come back into the input field to be edited or sent again. */
+  const interrupt = () => {
+    if (!busy || stop.isPending) return
+    const waiting = state.queue.map((m) => m.text)
+    stop.mutate(undefined, {
+      onSuccess: () => {
+        if (waiting.length > 0) setDraft((d) => [...waiting, d.trim()].filter(Boolean).join('\n\n'))
+      },
+    })
+  }
+  const interruptRef = useRef(interrupt)
+  useEffect(() => {
+    interruptRef.current = interrupt
+  })
+  useEffect(() => {
+    if (!busy) return
+    const onEsc = (e: globalThis.KeyboardEvent) => {
+      // Not while a dialog (command palette, …) is open or another handler already used the key (suggestion list).
+      if (e.key !== 'Escape' || e.defaultPrevented || document.querySelector('[role="dialog"]')) return
+      e.preventDefault()
+      interruptRef.current()
+    }
+    document.addEventListener('keydown', onEsc)
+    return () => document.removeEventListener('keydown', onEsc)
+  }, [busy])
 
   const choose = (s: Suggestion) => {
     setDraft(s.apply())
@@ -167,6 +195,11 @@ function SessionBody({ sessionId, title, projectPath, state, setMode, showCost }
       return
     }
     if (matches.length > 0) {
+      if (e.key === 'Escape') {
+        // Closes nothing yet, but must not interrupt the agent while the list is open.
+        e.preventDefault()
+        return
+      }
       if (e.key === 'ArrowDown') {
         e.preventDefault()
         setPick((pick + 1) % matches.length)
@@ -201,7 +234,7 @@ function SessionBody({ sessionId, title, projectPath, state, setMode, showCost }
           </span>
           {cost !== undefined && <span className={styles.note} title="Cost of the last turn">{formatCost(cost)}</span>}
           {busy && (
-            <Button size="small" variant="danger" leadingVisual={SquareFillIcon} disabled={stop.isPending} onClick={() => stop.mutate()}>
+            <Button size="small" variant="danger" leadingVisual={SquareFillIcon} disabled={stop.isPending} onClick={interrupt} title="Interrupt the agent (Esc)">
               Stop
             </Button>
           )}
@@ -217,21 +250,31 @@ function SessionBody({ sessionId, title, projectPath, state, setMode, showCost }
             <Timeline
               items={state.items}
               approvalBusy={approve.isPending}
-              onApproval={(approvalId, allow) => approve.mutate({ approvalId, allow })}
+              onApproval={(approvalId, reply) => approve.mutate({ approvalId, ...reply })}
               availableCommands={state.slashCommands}
               onShowAgent={showAgent}
               onCommand={(command) => {
-                if (busy || send.isPending) return
+                if (send.isPending) return
                 setError(null)
                 send.mutate(`/${command}`, { onError: (e) => setError(e.message) })
               }}
             />
           )}
         </div>
-        {(error || approve.isError || stop.isError || permission.isError) && (
-          <p role="alert" className={styles.error}>{error ?? approve.error?.message ?? stop.error?.message ?? permission.error?.message}</p>
+        {(error || approve.isError || stop.isError || permission.isError || unqueue.isError) && (
+          <p role="alert" className={styles.error}>{error ?? approve.error?.message ?? stop.error?.message ?? permission.error?.message ?? unqueue.error?.message}</p>
         )}
-        <StatusLine projectPath={projectPath} state={state} git={git.data} onMode={changeMode} />
+        {state.queue.length > 0 && (
+          <ol className={styles.queue} aria-label="Queued messages">
+            {state.queue.map((m) => (
+              <li key={m.id}>
+                <span className={styles.queueText}>{m.text}</span>
+                <Button size="small" variant="invisible" aria-label="Remove queued message" leadingVisual={XIcon} disabled={unqueue.isPending} onClick={() => unqueue.mutate(m.id)} />
+              </li>
+            ))}
+          </ol>
+        )}
+        <StatusLine projectPath={projectPath} state={state} git={git.data} onMode={changeMode} busy={busy} />
         <div className={styles.composer}>
           {matches.length > 0 && (
             <ul className={styles.suggest} role="listbox" aria-label={slash.length > 0 ? 'Slash commands' : 'Cards'}>
@@ -247,15 +290,15 @@ function SessionBody({ sessionId, title, projectPath, state, setMode, showCost }
             block
             rows={3}
             aria-label="Message"
-            placeholder={busy ? 'The agent is working…' : 'Message the agent; / for commands, @ for cards (or drag a card here)'}
+            placeholder={busy ? 'The agent is working… Enter queues the message, Esc interrupts' : 'Message the agent; / for commands, @ for cards (or drag a card here)'}
             value={draft}
             onChange={(e) => { setDraft(e.target.value); setPick(0) }}
             onKeyDown={onKey}
             onDragOver={onDragOver}
             onDrop={onDrop}
           />
-          <Button variant="primary" onClick={submit} disabled={!draft.trim() || busy || send.isPending}>
-            Send
+          <Button variant="primary" onClick={submit} disabled={!draft.trim() || send.isPending}>
+            {busy ? 'Queue' : 'Send'}
           </Button>
         </div>
       </div>

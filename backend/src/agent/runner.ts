@@ -14,7 +14,10 @@ export type AgentEvent =
   /** `summary` is truncated to about 2000 characters. */
   | { type: 'tool_result'; id: string; isError: boolean; summary: string; parentToolUseId?: string }
   | { type: 'approval_request'; approvalId: string; toolName: string; input: unknown }
-  | { type: 'approval_resolved'; approvalId: string; allow: boolean }
+  /** `answers` (question → answer) for an AskUserQuestion form, `message` = the user's note (e.g. why a plan was sent back). */
+  | { type: 'approval_resolved'; approvalId: string; allow: boolean; answers?: Record<string, string>; message?: string }
+  /** Messages the user sent while a turn ran; they run one after another when the turn ends (emitted by the service). */
+  | { type: 'queue'; items: QueuedMessage[] }
   | { type: 'card'; cardId: number; action: 'created' | 'linked' }
   | { type: 'status'; status: 'idle' | 'running' | 'waiting_approval' | 'error' | 'stopped' }
   | { type: 'result'; isError: boolean; costUsd?: number; durationMs?: number }
@@ -29,6 +32,14 @@ export type AgentEvent =
   | { type: 'usage'; input: number; output: number; cacheRead: number; cacheCreation: number }
   /** Plan rate-limit utilization (percent) after a turn; only for subscription logins. */
   | { type: 'plan_usage'; fiveHour?: PlanWindow; sevenDay?: PlanWindow; subscriptionType: string | null }
+
+export type QueuedMessage = { id: string; text: string }
+
+/**
+ * The user's answer to a tool call that asked. `answers` fills an AskUserQuestion (question text → chosen label, several
+ * comma-separated, or free text); `mode` is the permission mode chosen when approving a plan (ExitPlanMode).
+ */
+export type ApprovalAnswer = { allow: boolean; message?: string; answers?: Record<string, string>; mode?: PermissionMode }
 
 export type PlanWindow = { utilization: number; resetsAt: string | null }
 
@@ -51,7 +62,7 @@ export type TurnInput = {
   env: Record<string, string | undefined>
   cardTools: CardTools
   /** Asks the user. Resolves when the user answered (or the session was stopped, which denies). */
-  approve(req: { toolName: string; input: unknown }): Promise<{ allow: boolean; message?: string }>
+  approve(req: { toolName: string; input: unknown }): Promise<ApprovalAnswer>
   signal: AbortSignal
   /** The current permission mode; read again for every tool call, because the user may change it during the turn. */
   getPermissionMode(): PermissionMode

@@ -121,6 +121,89 @@ function sessionRoutes(events: ReturnType<typeof rec>[], live: string[] = [], ex
 }
 
 describe('session view', () => {
+  it('queues a message while the agent works, lists it and removes it', async () => {
+    const { calls } = mockFetch(
+      sessionRoutes(
+        [rec(1, 'user', { text: 'work' }), rec(2, 'status', { status: 'running' }), rec(3, 'queue', { items: [{ id: 'q1', text: 'next task' }] })],
+        [],
+        {
+          'POST /api/code/sessions/1/messages': { status: 202, body: { accepted: true, queued: true } },
+          'DELETE /api/code/sessions/1/queue/q1': { status: 204 },
+        },
+      ),
+    )
+    const user = userEvent.setup()
+    renderWithProviders(<CodeSessionView sessionId={1} />)
+    const queue = await screen.findByRole('list', { name: 'Queued messages' })
+    expect(queue).toHaveTextContent('next task')
+    expect(screen.getByText('Esc to interrupt')).toBeInTheDocument()
+    await user.type(screen.getByRole('textbox', { name: 'Message' }), 'one more')
+    await user.click(screen.getByRole('button', { name: 'Queue' }))
+    await waitFor(() => expect(calls.find((c) => c.key === 'POST /api/code/sessions/1/messages')?.body).toEqual({ text: 'one more' }))
+    await user.click(within(queue).getByRole('button', { name: 'Remove queued message' }))
+    await waitFor(() => expect(calls.some((c) => c.key === 'DELETE /api/code/sessions/1/queue/q1')).toBe(true))
+  })
+
+  it('Esc interrupts a running turn and puts queued messages back into the input field', async () => {
+    const { calls } = mockFetch(
+      sessionRoutes([rec(1, 'user', { text: 'work' }), rec(2, 'status', { status: 'running' }), rec(3, 'queue', { items: [{ id: 'q1', text: 'next task' }] })], [], {
+        'POST /api/code/sessions/1/stop': { status: 204 },
+      }),
+    )
+    const user = userEvent.setup()
+    renderWithProviders(<CodeSessionView sessionId={1} />)
+    await screen.findByRole('list', { name: 'Queued messages' })
+    await user.click(screen.getByRole('textbox', { name: 'Message' }))
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(calls.some((c) => c.key === 'POST /api/code/sessions/1/stop')).toBe(true))
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Message' })).toHaveValue('next task'))
+  })
+
+  it('shows an AskUserQuestion as a form and sends the answers', async () => {
+    const input = {
+      questions: [
+        { question: 'Which database?', header: 'DB', multiSelect: false, options: [{ label: 'SQLite', description: 'One file' }, { label: 'Postgres', description: 'A server' }] },
+        { question: 'Which extras?', header: 'Extras', multiSelect: true, options: [{ label: 'Docs', description: '' }, { label: 'Tests', description: '' }] },
+      ],
+    }
+    const { calls } = mockFetch(
+      sessionRoutes([rec(1, 'tool_call', { id: 't1', name: 'AskUserQuestion', input }), rec(2, 'approval_request', { approvalId: 'a1', toolName: 'AskUserQuestion', input }), rec(3, 'status', { status: 'waiting_approval' })], [], {
+        'POST /api/code/sessions/1/approvals/a1': { status: 204 },
+      }),
+    )
+    const user = userEvent.setup()
+    renderWithProviders(<CodeSessionView sessionId={1} />)
+    const form = await screen.findByRole('form', { name: 'Questions from the agent' })
+    const submit = within(form).getByRole('button', { name: 'Submit answers' })
+    expect(submit).toBeDisabled()
+    await user.click(within(form).getByRole('radio', { name: /Postgres/ }))
+    await user.click(within(form).getByRole('checkbox', { name: /Docs/ }))
+    await user.click(within(form).getAllByRole('checkbox', { name: 'Other' })[0])
+    await user.type(within(form).getByRole('textbox', { name: 'Your answer to: Which extras?' }), 'CI')
+    await user.click(submit)
+    await waitFor(() =>
+      expect(calls.find((c) => c.key === 'POST /api/code/sessions/1/approvals/a1')?.body).toEqual({ allow: true, answers: { 'Which database?': 'Postgres', 'Which extras?': 'Docs, CI' } }),
+    )
+  })
+
+  it('shows a plan and approves it with a permission mode, or sends it back with a note', async () => {
+    const input = { plan: '## Steps\n1. Add the table' }
+    const { calls } = mockFetch(
+      sessionRoutes([rec(1, 'tool_call', { id: 't1', name: 'ExitPlanMode', input }), rec(2, 'approval_request', { approvalId: 'a1', toolName: 'ExitPlanMode', input })], [], {
+        'POST /api/code/sessions/1/approvals/a1': { status: 204 },
+      }),
+    )
+    const user = userEvent.setup()
+    renderWithProviders(<CodeSessionView sessionId={1} />)
+    const group = await screen.findByRole('group', { name: 'Plan approval' })
+    expect(within(group).getByRole('heading', { name: 'Steps' })).toBeInTheDocument()
+    await user.type(within(group).getByRole('textbox', { name: 'Note for the agent' }), 'add docs')
+    await user.click(within(group).getByRole('button', { name: 'Keep planning' }))
+    await waitFor(() => expect(calls.find((c) => c.key === 'POST /api/code/sessions/1/approvals/a1')?.body).toEqual({ allow: false, message: 'add docs' }))
+    await user.click(within(group).getByRole('button', { name: 'Yes, accept edits' }))
+    await waitFor(() => expect(calls.filter((c) => c.key === 'POST /api/code/sessions/1/approvals/a1').at(-1)?.body).toEqual({ allow: true, mode: 'acceptEdits' }))
+  })
+
   it('does not carry a running state over when the view switches to another session', async () => {
     const { calls } = mockFetch({
       ...status,
@@ -135,7 +218,7 @@ describe('session view', () => {
     const user = userEvent.setup()
     const view = renderWithProviders(<CodeSessionView sessionId={1} />)
     expect(await screen.findByText('still working')).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('The agent is working…')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText(/The agent is working…/)).toBeInTheDocument()
     view.rerender(
       <ThemeProvider colorMode="night">
         <QueryClientProvider client={view.client}>
@@ -375,6 +458,15 @@ describe('session view', () => {
     await user.click(await screen.findByRole('button', { name: 'Show changes' }))
     expect(await screen.findByText(/not a git repository/)).toBeInTheDocument()
     localStorage.removeItem('promptsys.code.changes.1')
+  })
+
+  it('renders agent Markdown tables and [cN] references as card chips', async () => {
+    mockFetch(sessionRoutes([rec(1, 'text', { text: 'See [c15].\n\n| Card | Content |\n|---|---|\n| c18 | Identity |' })]))
+    renderWithProviders(<CodeSessionView sessionId={1} />)
+    expect(await screen.findByRole('table')).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: 'Content' })).toBeInTheDocument()
+    expect(screen.getByRole('cell', { name: 'Identity' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /c15/ })).toBeInTheDocument()
   })
 
   it('suggests slash commands and sends the message', async () => {

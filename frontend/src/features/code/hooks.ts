@@ -5,7 +5,7 @@ import { eventJson, subscribeSse } from '../../api/sse.ts'
 import type { AppMode, CodeSession, PlanUsage, CodeSessionDetail, CodeStatus, GitInfo, PermissionMode, SessionCard, SessionChanges } from '../../api/types.ts'
 import { keys } from '../cards/hooks.ts'
 import { useSaveSettings, useSettings } from '../settings/hooks.ts'
-import { applyEvent, emptyState, fromRecord, replay, type CodeEvent, type SessionState } from './model.ts'
+import { applyEvent, emptyState, fromRecord, replay, type ApprovalReply, type CodeEvent, type SessionState } from './model.ts'
 
 export const codeKeys = {
   status: ['code', 'status'] as const,
@@ -85,14 +85,19 @@ export function useDeleteSession() {
   })
 }
 
+/** Sends a message; while a turn runs the backend queues it (`queued: true`). */
 export function useSendMessage(sessionId: number) {
-  return useMutation({ mutationFn: (text: string) => api(`/api/code/sessions/${sessionId}/messages`, { method: 'POST', body: { text } }) })
+  return useMutation({ mutationFn: (text: string) => api<{ accepted: boolean; queued: boolean }>(`/api/code/sessions/${sessionId}/messages`, { method: 'POST', body: { text } }) })
+}
+
+export function useRemoveQueued(sessionId: number) {
+  return useMutation({ mutationFn: (queueId: string) => api(`/api/code/sessions/${sessionId}/queue/${queueId}`, { method: 'DELETE' }) })
 }
 
 export function useResolveApproval(sessionId: number) {
   return useMutation({
-    mutationFn: ({ approvalId, allow }: { approvalId: string; allow: boolean }) =>
-      api(`/api/code/sessions/${sessionId}/approvals/${approvalId}`, { method: 'POST', body: { allow } }),
+    mutationFn: ({ approvalId, ...reply }: ApprovalReply & { approvalId: string }) =>
+      api(`/api/code/sessions/${sessionId}/approvals/${approvalId}`, { method: 'POST', body: reply }),
   })
 }
 

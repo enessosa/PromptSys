@@ -20,6 +20,13 @@ export type GateDecision = 'allow' | 'ask' | 'none'
 /** Tools that change files; with the mode "Accept edits" they run without asking inside the project. */
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'NotebookEdit', 'MultiEdit'])
 
+/**
+ * Tools that are a question to the user, not an action: the hook leaves them to the SDK, which hands them to `canUseTool`.
+ * There the user's answer (the chosen options, the approved plan) goes back as the tool's input. Allowing them in the hook
+ * would run AskUserQuestion without answers.
+ */
+export const QUESTION_TOOLS = new Set(['AskUserQuestion', 'ExitPlanMode'])
+
 /** The SDK's own mode for ours. "Accept edits" is done by the gate (it knows the project folder), so the SDK stays on `default`. */
 export const sdkPermissionMode = (mode: PermissionMode): SdkPermissionMode => (mode === 'plan' ? 'plan' : mode === 'auto' ? 'auto' : 'default')
 
@@ -69,6 +76,7 @@ function pathsInside(toolInput: unknown, cwd: string, requirePath: boolean): boo
  */
 export function preToolUseDecision(toolName: string, toolInput?: unknown, cwd?: string, mode: PermissionMode = 'default'): GateDecision {
   if (toolName.startsWith(`mcp__${MCP_SERVER}__`)) return 'allow'
+  if (QUESTION_TOOLS.has(toolName)) return 'none'
   const rest: GateDecision = mode === 'auto' ? 'none' : 'ask'
   if (READ_ONLY_TOOLS.has(toolName)) return cwd === undefined || pathsInside(toolInput, cwd, false) ? 'allow' : rest
   if (mode === 'acceptEdits' && EDIT_TOOLS.has(toolName) && cwd !== undefined && pathsInside(toolInput, cwd, true)) return 'allow'
@@ -137,10 +145,18 @@ for the same term exists: search with find_cards first. Connect related terms wi
 Put each card in a fitting folder (record_card "folder", relative to the project's card folder, lowercase, e.g. "backend/api",
 "frontend", "docs", "concepts", "tools"): reuse the folders that find_cards shows before inventing new ones, and follow folder
 conventions from the project's instructions (CLAUDE.md) when they name any.
+When you mention a card to the user, write its number as [cN] (e.g. [c15]); PromptSys shows it as a link.
 The user may reference cards in a message as [cN]; their content then arrives in <promptsys-cards> under "Referenced by the user".
 The user reviews the cards. Cards the user confirmed or corrected arrive at the start of a prompt inside <promptsys-cards> ... </promptsys-cards>
 as "[cN] title: body"; treat them as binding and link new cards to them by their number N when they relate. Terms the user rejected are
 listed there too: do not record them again.`
+
+/** What the agent reads when the user says no. */
+export function denyMessage(toolName: string): string {
+  if (toolName === 'AskUserQuestion') return 'The user did not answer the question.'
+  if (toolName === 'ExitPlanMode') return 'The user wants to keep planning; do not start the implementation yet.'
+  return 'The user denied this tool call.'
+}
 
 function truncate(text: string, limit = SUMMARY_LIMIT): string {
   return text.length > limit ? `${text.slice(0, limit)}…` : text
@@ -318,9 +334,11 @@ export function createSdkRunner(): AgentRunner {
         }
       }
       // What the SDK still wants to ask itself (mode "Auto", plan approval, …) goes to the user as well.
+      // Questions (AskUserQuestion) get the user's answers in their input, like Claude Code's own question form fills them.
       const canUseTool: CanUseTool = async (toolName, toolInput) => {
         const answer = await ask(toolName, toolInput)
-        return answer.allow ? { behavior: 'allow', updatedInput: toolInput } : { behavior: 'deny', message: answer.message ?? 'The user denied this tool call.' }
+        if (!answer.allow) return { behavior: 'deny', message: answer.message ?? denyMessage(toolName) }
+        return { behavior: 'allow', updatedInput: answer.answers ? { ...toolInput, answers: answer.answers } : toolInput }
       }
       const claudePath = requireClaude(input.env)
       const run = query({

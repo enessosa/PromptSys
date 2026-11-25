@@ -41,7 +41,13 @@ test('claude code mode: session, echo, card, approval, review, second session, b
     await page.getByRole('button', { name: 'Send' }).click()
     const approval = page.getByRole('group', { name: 'Tool Edit' })
     await expect(approval).toBeVisible()
+    // While the agent waits, a new message is queued and runs after the turn.
+    await box.fill('queued task')
+    await page.getByRole('button', { name: 'Queue' }).click()
+    await expect(page.getByRole('list', { name: 'Queued messages' })).toContainText('queued task')
     await approval.getByRole('button', { name: 'Allow' }).click()
+    await expect(timeline).toContainText('Working on: queued task')
+    await expect(page.getByRole('list', { name: 'Queued messages' })).toHaveCount(0)
     await expect(approval).toContainText('Allowed')
     await expect(page.getByRole('group', { name: 'Tool Edit' })).toHaveCount(1)
     await approval.getByRole('button', { name: 'Show details' }).click()
@@ -50,7 +56,7 @@ test('claude code mode: session, echo, card, approval, review, second session, b
     // Status line and permission mode: "Accept edits" runs the next edit without asking.
     const line = page.getByRole('group', { name: 'Session status' })
     await expect(line).toContainText('13%')
-    await expect(line).toContainText('Tokens 50k')
+    await expect(line).toContainText('Tokens 75k')
     await expect(page.getByTestId('plan-usage')).toHaveText('Plan limits · 5h 34% · 7d 12%')
     await line.getByRole('combobox', { name: 'Permission mode' }).selectOption('acceptEdits')
     await box.fill('edit again')
@@ -81,6 +87,14 @@ test('claude code mode: session, echo, card, approval, review, second session, b
     await page.getByRole('group', { name: 'Tool Agent' }).getByRole('button', { name: 'Show', exact: true }).click()
     await expect(agents.getByRole('list', { name: 'Agent activity' })).toContainText('Looking at package.json')
     await expect(agents).toContainText('Build scripts live in package.json (fake)')
+
+    // A question of the agent is a form; the answer reaches the agent.
+    await box.fill('ask a question')
+    await page.getByRole('button', { name: 'Send' }).click()
+    const form = page.getByRole('form', { name: 'Questions from the agent' })
+    await form.getByRole('radio', { name: /Postgres/ }).check()
+    await form.getByRole('button', { name: 'Submit answers' }).click()
+    await expect(timeline).toContainText('You chose: Postgres')
 
     // Second session: both are listed.
     await createSession(page, folder, second)

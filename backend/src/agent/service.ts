@@ -7,7 +7,7 @@ import type { Card, LinkKind } from '../card/schema.ts'
 import { AppError } from '../common/errors.ts'
 import { createSettingsRepository } from '../settings/index.ts'
 import { gitChanges, gitInfo } from './git.ts'
-import type { AgentEvent, AgentRunner, CardTools, PermissionMode } from './runner.ts'
+import type { AgentEvent, AgentRunner, ApprovalAnswer, CardTools, PermissionMode, QueuedMessage } from './runner.ts'
 
 type SessionStatus = Extract<AgentEvent, { type: 'status' }>['status']
 
@@ -27,7 +27,7 @@ export type CardReview = { id: number; title: string; body: string; reviewStatus
 
 type ActiveTurn = {
   controller: AbortController
-  pending: Map<string, { resolve: (answer: { allow: boolean; message?: string }) => void }>
+  pending: Map<string, { resolve: (answer: ApprovalAnswer) => void }>
   done: Promise<void>
   modeListeners: Set<(mode: PermissionMode) => void>
 }
@@ -49,6 +49,20 @@ const NOW = "strftime('%Y-%m-%dT%H:%M:%fZ','now')"
 /** Sessions that were running when the process stopped can never continue: mark them `stopped`. Returns how many. */
 export function resetStaleSessions(db: DatabaseSync): number {
   const result = db.prepare(`UPDATE code_sessions SET status = 'stopped', updated_at = ${NOW} WHERE status IN ('running','waiting_approval')`).run()
+  // Queued messages lived in memory only: an old queue that was not empty is shown as empty from now on.
+  const queues = db
+    .prepare(
+      `SELECT e.session_id, e.payload FROM code_events e
+       WHERE e.type = 'queue' AND e.seq = (SELECT MAX(seq) FROM code_events WHERE session_id = e.session_id AND type = 'queue')`,
+    )
+    .all()
+  for (const q of queues) {
+    if ((JSON.parse(q.payload as string) as { items: unknown[] }).items.length === 0) continue
+    db.prepare(
+      `INSERT INTO code_events (session_id, seq, type, payload, created_at)
+       SELECT ?, COALESCE(MAX(seq), 0) + 1, 'queue', '{"items":[]}', ? FROM code_events WHERE session_id = ?`,
+    ).run(q.session_id as number, new Date().toISOString(), q.session_id as number)
+  }
   return Number(result.changes)
 }
 
@@ -64,7 +78,10 @@ export function cardFolder(projectPath: string, folder: string | undefined): str
     .split('/')
     .map((p) => p.trim().replace(/[^\w .-]/g, '-'))
     .filter((p) => p && p !== '.' && p !== '..')
-  return [cardRoot(projectPath), ...parts].join('/').slice(0, 500)
+  const root = cardRoot(projectPath)
+  // The agent sometimes repeats the project folder ("OpenRole" → "OpenRole/OpenRole"): it is the root already.
+  while (parts.length > 0 && parts[0].toLowerCase() === root.toLowerCase()) parts.shift()
+  return [root, ...parts].join('/').slice(0, 500)
 }
 
 /** Cards the user referenced in the message as [cN] (archived and unknown ones are left out). */
@@ -108,6 +125,15 @@ export function createAgentService(db: DatabaseSync, runner: AgentRunner) {
   const settings = createSettingsRepository(db)
   const active = new Map<number, ActiveTurn>()
   const subscribers = new Map<number, Set<(event: StoredEvent) => void>>()
+  const queues = new Map<number, QueuedMessage[]>()
+  const QUEUE_LIMIT = 20
+
+  const queueOf = (id: number) => queues.get(id) ?? []
+  const setQueue = (id: number, items: QueuedMessage[]) => {
+    if (items.length === 0) queues.delete(id)
+    else queues.set(id, items)
+    emit(id, { type: 'queue', items })
+  }
 
   const notFound = (id: number) => new AppError(404, 'session_not_found', `Session ${id} not found`)
   const row = (id: number): Row => {
@@ -228,7 +254,13 @@ export function createAgentService(db: DatabaseSync, runner: AgentRunner) {
             turn.pending.set(approvalId, {
               resolve: (answer) => {
                 turn.pending.delete(approvalId)
-                emit(sessionId, { type: 'approval_resolved', approvalId, allow: answer.allow })
+                emit(sessionId, {
+                  type: 'approval_resolved',
+                  approvalId,
+                  allow: answer.allow,
+                  ...(answer.answers ? { answers: answer.answers } : {}),
+                  ...(answer.message ? { message: answer.message } : {}),
+                })
                 if (turn.pending.size === 0 && !turn.controller.signal.aborted) setStatus('running')
                 resolve(answer)
               },
@@ -242,7 +274,7 @@ export function createAgentService(db: DatabaseSync, runner: AgentRunner) {
           db.prepare('UPDATE code_sessions SET sdk_session_id = ?, slash_commands = ? WHERE id = ?').run(event.sdkSessionId, JSON.stringify(event.slashCommands), sessionId)
         }
         // Status and approvals belong to the service; a runner only reports what the agent did.
-        if (event.type === 'status' || event.type === 'approval_request' || event.type === 'approval_resolved' || event.type === 'mode') continue
+        if (event.type === 'status' || event.type === 'approval_request' || event.type === 'approval_resolved' || event.type === 'mode' || event.type === 'queue') continue
         emit(sessionId, event)
       }
     } catch (err) {
@@ -255,6 +287,28 @@ export function createAgentService(db: DatabaseSync, runner: AgentRunner) {
     // Free the session before announcing the end, so a client that reacts to `idle` can send the next message at once.
     if (active.get(sessionId) === turn) active.delete(sessionId)
     setStatus(turn.controller.signal.aborted ? 'stopped' : failed ? 'error' : 'idle')
+  }
+
+  function startTurn(id: number, text: string): void {
+    const session = toSession(row(id))
+    // A slash command has to stay the first thing in the prompt, so it gets no card block.
+    const block = text.startsWith('/') ? '' : bindingBlock(db, session.projectPath, text)
+    const prompt = block ? `${block}\n\n${text}` : text
+    const turn: ActiveTurn = { controller: new AbortController(), pending: new Map(), done: Promise.resolve(), modeListeners: new Set() }
+    active.set(id, turn)
+    emit(id, { type: 'user', text })
+    emit(id, { type: 'status', status: 'running' })
+    turn.done = runTurn(id, turn, prompt)
+      .catch((err: unknown) => console.error('Agent turn failed', err))
+      .finally(() => {
+        if (active.get(id) === turn) active.delete(id)
+        // The next queued message runs once the turn has ended (also after an error); a stop has emptied the queue.
+        const [next, ...rest] = queueOf(id)
+        if (next && !active.has(id) && !turn.controller.signal.aborted) {
+          setQueue(id, rest)
+          startTurn(id, next.text)
+        }
+      })
   }
 
   return {
@@ -316,31 +370,40 @@ export function createAgentService(db: DatabaseSync, runner: AgentRunner) {
     async remove(id: number): Promise<void> {
       row(id)
       await this.stop(id)
+      queues.delete(id)
       db.prepare('DELETE FROM code_sessions WHERE id = ?').run(id)
       subscribers.delete(id)
     },
 
-    /** Starts a turn in the background (events arrive through `subscribe` and `get`). */
-    sendMessage(id: number, text: string): void {
-      const session = toSession(row(id))
-      if (active.has(id)) throw new AppError(409, 'session_busy', 'This session is still working on the last message.')
-      // A slash command has to stay the first thing in the prompt, so it gets no card block.
-      const block = text.startsWith('/') ? '' : bindingBlock(db, session.projectPath, text)
-      const prompt = block ? `${block}\n\n${text}` : text
-      const turn: ActiveTurn = { controller: new AbortController(), pending: new Map(), done: Promise.resolve(), modeListeners: new Set() }
-      active.set(id, turn)
-      emit(id, { type: 'user', text })
-      emit(id, { type: 'status', status: 'running' })
-      turn.done = runTurn(id, turn, prompt)
-        .catch((err: unknown) => console.error('Agent turn failed', err))
-        .finally(() => {
-          if (active.get(id) === turn) active.delete(id)
-        })
+    /**
+     * Starts a turn in the background (events arrive through `subscribe` and `get`). While a turn runs, the message is queued
+     * instead, like in the terminal: queued messages run one after another when the turn ends.
+     */
+    sendMessage(id: number, text: string): { queued: boolean } {
+      row(id)
+      if (active.has(id)) {
+        const queue = queueOf(id)
+        if (queue.length >= QUEUE_LIMIT) throw new AppError(409, 'queue_full', `At most ${QUEUE_LIMIT} messages can wait.`)
+        setQueue(id, [...queue, { id: crypto.randomUUID(), text }])
+        return { queued: true }
+      }
+      startTurn(id, text)
+      return { queued: false }
     },
 
-    /** Aborts a running turn and denies its open approvals. Resolves when the turn has ended. */
+    /** Takes a queued message back before it runs. */
+    removeQueued(id: number, queueId: string): void {
+      row(id)
+      const queue = queueOf(id)
+      if (!queue.some((m) => m.id === queueId)) throw new AppError(404, 'queued_message_not_found', `Queued message ${queueId} not found`)
+      setQueue(id, queue.filter((m) => m.id !== queueId))
+    },
+
+    /** Aborts a running turn, denies its open approvals and empties the queue. Resolves when the turn has ended. */
     async stop(id: number): Promise<void> {
       row(id)
+      // Interrupting also drops what waits; the user gets the texts back in the input field (frontend).
+      if (queueOf(id).length > 0) setQueue(id, [])
       const turn = active.get(id)
       if (!turn) return
       turn.controller.abort()
@@ -348,10 +411,12 @@ export function createAgentService(db: DatabaseSync, runner: AgentRunner) {
       await turn.done
     },
 
-    resolveApproval(id: number, approvalId: string, answer: { allow: boolean; message?: string }): void {
+    /** `answer.mode` (approving a plan) switches the session's permission mode before the agent goes on. */
+    resolveApproval(id: number, approvalId: string, answer: ApprovalAnswer): void {
       row(id)
       const pending = active.get(id)?.pending.get(approvalId)
       if (!pending) throw new AppError(404, 'approval_not_found', `Approval ${approvalId} not found`)
+      if (answer.allow && answer.mode) this.setPermissionMode(id, answer.mode)
       pending.resolve(answer)
     },
 

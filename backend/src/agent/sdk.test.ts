@@ -89,6 +89,13 @@ describe('preToolUseDecision', () => {
     }
   })
 
+  it('leaves questions to the user (AskUserQuestion, ExitPlanMode) to the SDK, which hands them to canUseTool', () => {
+    for (const mode of ['default', 'acceptEdits', 'plan', 'auto'] as const) {
+      expect(preToolUseDecision('AskUserQuestion', {}, undefined, mode)).toBe('none')
+      expect(preToolUseDecision('ExitPlanMode', {}, undefined, mode)).toBe('none')
+    }
+  })
+
   it('asks for everything that can change something or reach out', () => {
     for (const name of ['Edit', 'Write', 'Bash', 'WebFetch', 'WebSearch', 'NotebookEdit', 'mcp__other__thing']) {
       expect(preToolUseDecision(name)).toBe('ask')

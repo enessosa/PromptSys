@@ -17,7 +17,12 @@ const updateSchema = z
   .strict()
   .refine((v) => Object.keys(v).length > 0, 'At least one field is required')
 const messageSchema = z.object({ text: z.string().trim().min(1).max(100_000) })
-const approvalSchema = z.object({ allow: z.boolean(), message: z.string().max(1000).optional() })
+const approvalSchema = z.object({
+  allow: z.boolean(),
+  message: z.string().max(10_000).optional(),
+  answers: z.record(z.string().max(500), z.string().max(10_000)).optional(),
+  mode: z.enum(PERMISSION_MODES).optional(),
+})
 const reviewSchema = z
   .object({
     reviewStatus: z.enum(['confirmed', 'rejected']),
@@ -65,8 +70,12 @@ export function agentRoutes(db: DatabaseSync, runner: AgentRunner, service: Agen
 
   routes.post('/code/sessions/:id/messages', async (c) => {
     const id = idParam(c)
-    service.sendMessage(id, (await parseBody(c, messageSchema)).text)
-    return c.json({ accepted: true }, 202)
+    const { queued } = service.sendMessage(id, (await parseBody(c, messageSchema)).text)
+    return c.json({ accepted: true, queued }, 202)
+  })
+  routes.delete('/code/sessions/:id/queue/:queueId', (c) => {
+    service.removeQueued(idParam(c), c.req.param('queueId'))
+    return c.body(null, 204)
   })
 
   routes.get('/code/sessions/:id/stream', (c) => {

@@ -4,7 +4,46 @@ import type { CodeEventRecord, CodeSessionStatus, PermissionMode } from '../../a
 export type CodeEvent = { seq: number; type: string; [field: string]: unknown }
 
 /** One row per tool call; the approval (if one was asked) is part of the row. `id` is empty while only the approval is known. */
-export type ToolItem = { kind: 'tool'; key: string; id: string; name: string; input: unknown; result?: { isError: boolean; summary: string }; approval?: { approvalId: string; allow?: boolean } }
+export type ToolItem = {
+  kind: 'tool'
+  key: string
+  id: string
+  name: string
+  input: unknown
+  result?: { isError: boolean; summary: string }
+  approval?: { approvalId: string; allow?: boolean; answers?: Record<string, string>; message?: string }
+}
+
+/** The user's reply to a tool call that asked: allow/deny, answers of a question form, the mode chosen with a plan, a note. */
+export type ApprovalReply = { allow: boolean; message?: string; answers?: Record<string, string>; mode?: PermissionMode }
+
+export type QueuedMessage = { id: string; text: string }
+
+export type Question = { question: string; header: string; multiSelect: boolean; options: { label: string; description: string }[] }
+
+/** The questions of an AskUserQuestion input; malformed entries are dropped. */
+export function parseQuestions(input: unknown): Question[] {
+  const list = typeof input === 'object' && input !== null ? (input as { questions?: unknown }).questions : undefined
+  if (!Array.isArray(list)) return []
+  return list.flatMap((q): Question[] => {
+    if (typeof q !== 'object' || q === null || typeof (q as { question?: unknown }).question !== 'string') return []
+    const o = q as Record<string, unknown>
+    const options = Array.isArray(o.options)
+      ? o.options.flatMap((x) => (typeof x === 'object' && x !== null && typeof (x as { label?: unknown }).label === 'string' ? [{ label: (x as { label: string }).label, description: str((x as { description?: unknown }).description) }] : []))
+      : []
+    return [{ question: o.question as string, header: str(o.header), multiSelect: o.multiSelect === true, options }]
+  })
+}
+
+/** The answer text of one question: the picked labels (comma-separated) and the free text of "Other"; '' while unanswered. */
+export function answerOf(choice: { picked: string[]; other: string; otherOn: boolean }, multiSelect: boolean): string {
+  const other = choice.otherOn ? choice.other.trim() : ''
+  if (!multiSelect) return other || choice.picked[0] || ''
+  return [...choice.picked, ...(other ? [other] : [])].join(', ')
+}
+
+/** The plan text of an ExitPlanMode input. */
+export const planText = (input: unknown): string => (typeof input === 'object' && input !== null ? str((input as { plan?: unknown }).plan) : '')
 
 /** What a subagent did: its own text and tool rows. */
 export type AgentItem = { kind: 'text'; key: string; text: string } | ToolItem
@@ -42,6 +81,8 @@ export type SessionState = {
   tokens: { input: number; output: number; cacheRead: number; cacheCreation: number }
   /** Number of finished turns seen; changes trigger refreshes of git info and changes. */
   turns: number
+  /** Messages waiting for the running turn to end. */
+  queue: QueuedMessage[]
 }
 
 export const emptyState = (status: CodeSessionStatus = 'idle', slashCommands: string[] = [], permissionMode: PermissionMode = 'default'): SessionState => ({
@@ -56,6 +97,7 @@ export const emptyState = (status: CodeSessionStatus = 'idle', slashCommands: st
   context: null,
   tokens: { input: 0, output: 0, cacheRead: 0, cacheCreation: 0 },
   turns: 0,
+  queue: [],
 })
 
 export const fromRecord = (r: CodeEventRecord): CodeEvent => ({ ...r.payload, seq: r.seq, type: r.type })
@@ -137,8 +179,16 @@ export function applyEvent(state: SessionState, ev: CodeEvent): SessionState {
       if (at >= 0) return { ...next, items: state.items.map((i, n) => (n === at && i.kind === 'tool' ? { ...i, approval } : i)) }
       return { ...next, items: [...state.items, { kind: 'tool', key, id: '', name, input: ev.input, approval }] }
     }
-    case 'approval_resolved':
-      return { ...next, items: state.items.map((i) => (i.kind === 'tool' && i.approval && i.approval.approvalId === ev.approvalId ? { ...i, approval: { approvalId: i.approval.approvalId, allow: ev.allow === true } } : i)) }
+    case 'approval_resolved': {
+      const answers = typeof ev.answers === 'object' && ev.answers !== null ? (ev.answers as Record<string, string>) : undefined
+      const resolved = (approvalId: string) => ({ approvalId, allow: ev.allow === true, ...(answers ? { answers } : {}), ...(typeof ev.message === 'string' ? { message: ev.message } : {}) })
+      return { ...next, items: state.items.map((i) => (i.kind === 'tool' && i.approval && i.approval.approvalId === ev.approvalId ? { ...i, approval: resolved(i.approval.approvalId) } : i)) }
+    }
+    case 'queue':
+      return {
+        ...next,
+        queue: Array.isArray(ev.items) ? ev.items.flatMap((m) => (typeof m === 'object' && m !== null && typeof m.id === 'string' && typeof m.text === 'string' ? [{ id: m.id as string, text: m.text as string }] : [])) : [],
+      }
     case 'card':
       return { ...next, items: [...state.items, { kind: 'card', key, cardId: Number(ev.cardId), action: ev.action === 'linked' ? 'linked' : 'created' }] }
     case 'status':
