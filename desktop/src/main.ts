@@ -217,10 +217,14 @@ function buildMenu(): void {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))
 }
 
+/** Permissions the UI may use without a prompt: writing to the clipboard (copy buttons of code blocks). */
+const ALLOWED_PERMISSIONS = new Set(['clipboard-sanitized-write'])
+
 /** No remote content: the app session only talks to the local backend. Also no permission prompts (camera, location, …). */
 function lockDownSession(): void {
   const ses = session.defaultSession
-  ses.setPermissionRequestHandler((_wc, _permission, callback) => callback(false))
+  ses.setPermissionRequestHandler((_wc, permission, callback) => callback(ALLOWED_PERMISSIONS.has(permission)))
+  ses.setPermissionCheckHandler((_wc, permission) => ALLOWED_PERMISSIONS.has(permission))
   ses.webRequest.onBeforeRequest((details, callback) => {
     const allowed = isAllowedRequest(details.url, port)
     if (!allowed) log.line(`blocked request ${details.url}`)

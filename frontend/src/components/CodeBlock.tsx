@@ -16,19 +16,40 @@ function languageOf(node: HastNode | undefined): string | null {
   return lang ? lang.slice('language-'.length) : null
 }
 
+/** Copies through the Clipboard API, else through a hidden text field (older browsers, pages without permission). */
+async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text)
+    return true
+  } catch {
+    const field = document.createElement('textarea')
+    field.value = text
+    field.setAttribute('readonly', '')
+    field.style.position = 'fixed'
+    field.style.opacity = '0'
+    document.body.appendChild(field)
+    field.select()
+    try {
+      return document.execCommand('copy')
+    } catch {
+      return false
+    } finally {
+      field.remove()
+    }
+  }
+}
+
 /** A fenced code block: header with the language and a copy button, highlighted code below. */
 export function CodeBlock({ node, children }: { node?: unknown; children?: ReactNode }) {
   const [copied, setCopied] = useState(false)
   const hast = node as HastNode | undefined
   const lang = languageOf(hast)
   const copy = () => {
-    void navigator.clipboard
-      ?.writeText(textOf(hast).replace(/\n$/, ''))
-      .then(() => {
-        setCopied(true)
-        setTimeout(() => setCopied(false), 1500)
-      })
-      .catch(() => undefined)
+    void copyText(textOf(hast).replace(/\n$/, '')).then((ok) => {
+      if (!ok) return
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
   }
   return (
     <div className={styles.block}>
