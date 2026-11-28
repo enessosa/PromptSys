@@ -1,19 +1,29 @@
-import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from 'react'
+import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from 'react'
 import { Button, Textarea } from '@primer/react'
 import { DiffIcon, SidebarExpandIcon, SquareFillIcon, XIcon } from '@primer/octicons-react'
 import { ApiError } from '../../api/client.ts'
 import { EmptyState } from '../../components/EmptyState.tsx'
 import { ChangesPanel } from './ChangesPanel.tsx'
-import { useCodeSession, useCodeStatus, useGitInfo, useRemoveQueued, useResolveApproval, useSendMessage, useSetPermissionMode, useStopSession } from './hooks.ts'
+import { imageUrl, useCodeSession, useCodeStatus, useGitInfo, useRemoveQueued, useResolveApproval, useSendMessage, useSetPermissionMode, useStopSession } from './hooks.ts'
 import { ModeSwitch } from './ModeSwitch.tsx'
 import { useCards } from '../cards/hooks.ts'
-import { cardMatches, cardMention, formatCost, nextMode, slashMatches, STATUS_LABEL } from './model.ts'
+import { cardMatches, cardMention, formatCost, IMAGE_MAX_BYTES, IMAGE_MAX_COUNT, imageFromDataUrl, isPasteImageType, nextMode, slashMatches, STATUS_LABEL, type PastedImage } from './model.ts'
 import { SidePanel, type SideTab } from './SidePanel.tsx'
 import { StatusLine } from './StatusLine.tsx'
 import { Timeline } from './Timeline.tsx'
 import styles from './code.module.css'
 
 type Suggestion = { key: string; label: string; detail?: string; apply: () => string }
+
+type Attachment = PastedImage & { key: string }
+
+const readAsDataUrl = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result))
+    reader.onerror = () => reject(reader.error ?? new Error('The image could not be read.'))
+    reader.readAsDataURL(file)
+  })
 
 export function CodeSessionView({ sessionId }: { sessionId: number }) {
   const status = useCodeStatus()
@@ -66,6 +76,7 @@ function SessionBody({ sessionId, title, projectPath, state, setMode, showCost }
   const stop = useStopSession(sessionId)
   const unqueue = useRemoveQueued(sessionId)
   const [draft, setDraft] = useState('')
+  const [attachments, setAttachments] = useState<Attachment[]>([])
   const [panel, setPanel] = useState(true)
   const [changesOpen, setChangesOpen] = useState(() => loadChangesOpen(sessionId))
   const permission = useSetPermissionMode(sessionId)
@@ -87,10 +98,17 @@ function SessionBody({ sessionId, title, projectPath, state, setMode, showCost }
   // With the local login the SDK still reports what the turn would cost at API prices; nothing is billed, so it is hidden.
   const cost = showCost ? state.lastResult?.costUsd : undefined
 
+  // Follows new output only while the user is at the bottom; scrolling up to read stops it until they scroll back down.
+  const stick = useRef(true)
+  const onScroll = () => {
+    const el = scroller.current
+    if (el) stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+  }
+  const thinking = state.status === 'running'
   useEffect(() => {
     const el = scroller.current
-    if (el) el.scrollTop = el.scrollHeight
-  }, [state.items])
+    if (el && stick.current) el.scrollTop = el.scrollHeight
+  }, [state.items, thinking])
 
   const chooseTab = (tab: SideTab) => {
     setSideTab(tab)
@@ -137,10 +155,14 @@ function SessionBody({ sessionId, title, projectPath, state, setMode, showCost }
   /** While the agent works, the message is queued (like in the terminal) and runs when the turn ends. */
   const submit = () => {
     const text = draft.trim()
-    if (!text || send.isPending) return
+    if ((!text && attachments.length === 0) || send.isPending) return
     setError(null)
-    send.mutate(text, {
-      onSuccess: () => setDraft(''),
+    stick.current = true
+    send.mutate({ text, images: attachments.map(({ mediaType, data }) => ({ mediaType, data })) }, {
+      onSuccess: () => {
+        setDraft('')
+        setAttachments([])
+      },
       onError: (e) => setError(e instanceof ApiError && e.code === 'queue_full' ? 'Too many messages are waiting; remove one or wait for the agent.' : e.message),
     })
   }
@@ -176,12 +198,43 @@ function SessionBody({ sessionId, title, projectPath, state, setMode, showCost }
     setPick(0)
   }
 
+  /** Images pasted or dropped into the input go with the next message, like a paste in the terminal. */
+  const addImages = async (files: File[]) => {
+    const images = files.filter((f) => isPasteImageType(f.type))
+    if (images.length === 0) return
+    const tooBig = images.filter((f) => f.size > IMAGE_MAX_BYTES)
+    if (tooBig.length > 0) setError(`Images can be at most 5 MB (${tooBig.map((f) => f.name || 'pasted image').join(', ')}).`)
+    const read = await Promise.all(images.filter((f) => f.size <= IMAGE_MAX_BYTES).map((f) => readAsDataUrl(f).then(imageFromDataUrl).catch(() => null)))
+    const added = read.filter((i): i is PastedImage => i !== null).map((i) => ({ ...i, key: crypto.randomUUID() }))
+    setAttachments((all) => {
+      const next = [...all, ...added]
+      if (next.length > IMAGE_MAX_COUNT) setError(`At most ${IMAGE_MAX_COUNT} images per message.`)
+      return next.slice(0, IMAGE_MAX_COUNT)
+    })
+  }
+
+  const onPaste = (e: ClipboardEvent<HTMLTextAreaElement>) => {
+    // Screenshots (Cmd+Ctrl+Shift+4) arrive as clipboard items of kind "file"; some sources fill only `files`.
+    const fromItems = [...e.clipboardData.items].filter((i) => i.kind === 'file' && isPasteImageType(i.type)).map((i) => i.getAsFile()).filter((f): f is File => f !== null)
+    const files = fromItems.length > 0 ? fromItems : [...e.clipboardData.files].filter((f) => isPasteImageType(f.type))
+    if (files.length === 0) return
+    // A copied image often comes with its file name or HTML as text; only the image is wanted then.
+    e.preventDefault()
+    void addImages(files)
+  }
+
   const CARD_TYPE = 'application/x-promptsys-card'
   const onDragOver = (e: DragEvent<HTMLTextAreaElement>) => {
-    if (e.dataTransfer.types.includes(CARD_TYPE)) e.preventDefault()
+    if (e.dataTransfer.types.includes(CARD_TYPE) || e.dataTransfer.types.includes('Files')) e.preventDefault()
   }
-  /** A card dragged from the card tree becomes a [cN] reference at the end of the draft. */
+  /** A card dragged from the card tree becomes a [cN] reference at the end of the draft; dropped images are attached. */
   const onDrop = (e: DragEvent<HTMLTextAreaElement>) => {
+    const files = [...e.dataTransfer.files]
+    if (files.length > 0) {
+      e.preventDefault()
+      void addImages(files)
+      return
+    }
     const id = Number(e.dataTransfer.getData(CARD_TYPE))
     if (!Number.isInteger(id) || id <= 0) return
     e.preventDefault()
@@ -243,7 +296,7 @@ function SessionBody({ sessionId, title, projectPath, state, setMode, showCost }
           </Button>
           <Button size="small" variant="invisible" aria-label={panel ? 'Hide side panel' : 'Show side panel'} aria-pressed={panel} leadingVisual={SidebarExpandIcon} onClick={() => setPanel(!panel)} />
         </div>
-        <div className={styles.scroll} ref={scroller}>
+        <div className={styles.scroll} ref={scroller} onScroll={onScroll}>
           {state.items.length === 0 ? (
             <EmptyState title="Start the session">Describe a task. Type / for slash commands and skills, @ to reference a card.</EmptyState>
           ) : (
@@ -253,6 +306,7 @@ function SessionBody({ sessionId, title, projectPath, state, setMode, showCost }
               onApproval={(approvalId, reply) => approve.mutate({ approvalId, ...reply })}
               availableCommands={state.slashCommands}
               onShowAgent={showAgent}
+              imageSrc={(imageId) => imageUrl(sessionId, imageId)}
               onCommand={(command) => {
                 if (send.isPending) return
                 setError(null)
@@ -260,6 +314,7 @@ function SessionBody({ sessionId, title, projectPath, state, setMode, showCost }
               }}
             />
           )}
+          {thinking && <p className={styles.thinking} aria-live="polite">Thinking…</p>}
         </div>
         {(error || approve.isError || stop.isError || permission.isError || unqueue.isError) && (
           <p role="alert" className={styles.error}>{error ?? approve.error?.message ?? stop.error?.message ?? permission.error?.message ?? unqueue.error?.message}</p>
@@ -268,13 +323,28 @@ function SessionBody({ sessionId, title, projectPath, state, setMode, showCost }
           <ol className={styles.queue} aria-label="Queued messages">
             {state.queue.map((m) => (
               <li key={m.id}>
-                <span className={styles.queueText}>{m.text}</span>
+                <span className={styles.queueText}>
+                  {m.text}
+                  {m.images.length > 0 && ` (${m.images.length} image${m.images.length > 1 ? 's' : ''})`}
+                </span>
                 <Button size="small" variant="invisible" aria-label="Remove queued message" leadingVisual={XIcon} disabled={unqueue.isPending} onClick={() => unqueue.mutate(m.id)} />
               </li>
             ))}
           </ol>
         )}
         <StatusLine projectPath={projectPath} state={state} git={git.data} onMode={changeMode} busy={busy} />
+        {attachments.length > 0 && (
+          <ul className={styles.attachments} aria-label="Attached images">
+            {attachments.map((a, i) => (
+              <li key={a.key}>
+                <img src={`data:${a.mediaType};base64,${a.data}`} alt={`Attached image ${i + 1}`} />
+                <button type="button" aria-label={`Remove image ${i + 1}`} onClick={() => setAttachments((all) => all.filter((x) => x.key !== a.key))}>
+                  <XIcon size={10} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
         <div className={styles.composer}>
           {matches.length > 0 && (
             <ul className={styles.suggest} role="listbox" aria-label={slash.length > 0 ? 'Slash commands' : 'Cards'}>
@@ -290,14 +360,15 @@ function SessionBody({ sessionId, title, projectPath, state, setMode, showCost }
             block
             rows={3}
             aria-label="Message"
-            placeholder={busy ? 'The agent is working… Enter queues the message, Esc interrupts' : 'Message the agent; / for commands, @ for cards (or drag a card here)'}
+            placeholder={busy ? 'The agent is working… Enter queues the message, Esc interrupts' : 'Message the agent; / for commands, @ for cards, paste or drop images'}
             value={draft}
             onChange={(e) => { setDraft(e.target.value); setPick(0) }}
             onKeyDown={onKey}
+            onPaste={onPaste}
             onDragOver={onDragOver}
             onDrop={onDrop}
           />
-          <Button variant="primary" onClick={submit} disabled={!draft.trim() || send.isPending}>
+          <Button variant="primary" onClick={submit} disabled={(!draft.trim() && attachments.length === 0) || send.isPending}>
             {busy ? 'Queue' : 'Send'}
           </Button>
         </div>

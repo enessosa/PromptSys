@@ -33,6 +33,7 @@ export type ErrorCode =
   | 'approval_not_found'
   | 'queue_full'
   | 'queued_message_not_found'
+  | 'image_not_found'
   | 'invalid_project_path'
   | 'llm_rate_limited'
   | 'llm_error'

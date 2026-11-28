@@ -7,20 +7,40 @@ import type { AgentEntry, AgentStatus } from './model.ts'
 import { ToolRow } from './Timeline.tsx'
 import styles from './code.module.css'
 
-const STATUS_LABEL: Record<AgentStatus, string> = { running: 'Running', done: 'Done', error: 'Failed' }
+const STATUS_LABEL: Record<AgentStatus, string> = { running: 'Running', done: 'Done', error: 'Failed', stopped: 'Ended' }
 const noApproval = () => undefined
 
-/** Agents tab: the subagents the main agent started, each expandable to its own activity. */
+/**
+ * Agents tab: the running subagents, each expandable to its own activity. Finished ones leave the list (like in the terminal);
+ * they stay reachable under "Finished" and through "Show" in the timeline.
+ */
 export function AgentsPanel({ agents, expanded, onToggle }: { agents: AgentEntry[]; expanded: string | null; onToggle: (id: string) => void }) {
+  const [showFinished, setShowFinished] = useState(false)
+  const visible = agents.filter((a) => a.status === 'running' || a.id === expanded)
+  const finished = agents.filter((a) => a.status !== 'running' && a.id !== expanded)
   return (
     <aside className={styles.panel} aria-label="Agents">
       <h3>Agents</h3>
-      {agents.length === 0 && <p className={styles.note}>No subagents started yet.</p>}
+      {visible.length === 0 && <p className={styles.note}>{agents.length === 0 ? 'No subagents started yet.' : 'No agent is running.'}</p>}
       <ul>
-        {agents.map((a) => (
+        {visible.map((a) => (
           <AgentRow key={a.id} agent={a} open={expanded === a.id} onToggle={() => onToggle(a.id)} />
         ))}
       </ul>
+      {finished.length > 0 && (
+        <>
+          <button type="button" className={styles.resultToggle} aria-expanded={showFinished} onClick={() => setShowFinished(!showFinished)}>
+            {showFinished ? <ChevronDownIcon size={12} /> : <ChevronRightIcon size={12} />} Finished ({finished.length})
+          </button>
+          {showFinished && (
+            <ul aria-label="Finished agents">
+              {finished.map((a) => (
+                <AgentRow key={a.id} agent={a} open={false} onToggle={() => onToggle(a.id)} />
+              ))}
+            </ul>
+          )}
+        </>
+      )}
     </aside>
   )
 }

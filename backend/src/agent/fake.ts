@@ -15,7 +15,7 @@ export function createFakeRunner(): AgentRunner {
       // The card block that PromptSys prepends is not part of what the user typed.
       const typed = input.prompt.replace(/^<promptsys-cards>[\s\S]*?<\/promptsys-cards>\s*/, '')
       yield { type: 'init', sdkSessionId, model: 'fake-model', slashCommands: ['save', 'plantuml'] }
-      yield { type: 'text', text: `Working on: ${typed}` }
+      yield { type: 'text', text: `Working on: ${typed}${input.images?.length ? ` (${input.images.length} image${input.images.length > 1 ? 's' : ''})` : ''}` }
       try {
         await input.cardTools.recordCard({ title: `Understanding: ${typed.slice(0, 40)}`, body: `The task was: ${typed}` })
       } catch {

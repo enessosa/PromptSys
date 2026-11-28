@@ -5,7 +5,7 @@ import { eventJson, subscribeSse } from '../../api/sse.ts'
 import type { AppMode, CodeSession, PlanUsage, CodeSessionDetail, CodeStatus, GitInfo, PermissionMode, SessionCard, SessionChanges } from '../../api/types.ts'
 import { keys } from '../cards/hooks.ts'
 import { useSaveSettings, useSettings } from '../settings/hooks.ts'
-import { applyEvent, emptyState, fromRecord, replay, type ApprovalReply, type CodeEvent, type SessionState } from './model.ts'
+import { applyEvent, emptyState, fromRecord, replay, type ApprovalReply, type CodeEvent, type PastedImage, type SessionState } from './model.ts'
 
 export const codeKeys = {
   status: ['code', 'status'] as const,
@@ -77,6 +77,20 @@ export function useRenameSession() {
   })
 }
 
+/** Clears the chat of a session (new conversation, same title, folder and mode). */
+export function useResetSession() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => api<CodeSession>(`/api/code/sessions/${id}/reset`, { method: 'POST' }),
+    onSuccess: (_s, id) =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: codeKeys.sessions }),
+        qc.invalidateQueries({ queryKey: codeKeys.session(id) }),
+        qc.invalidateQueries({ queryKey: codeKeys.cards(id) }),
+      ]),
+  })
+}
+
 export function useDeleteSession() {
   const qc = useQueryClient()
   return useMutation({
@@ -87,7 +101,13 @@ export function useDeleteSession() {
 
 /** Sends a message; while a turn runs the backend queues it (`queued: true`). */
 export function useSendMessage(sessionId: number) {
-  return useMutation({ mutationFn: (text: string) => api<{ accepted: boolean; queued: boolean }>(`/api/code/sessions/${sessionId}/messages`, { method: 'POST', body: { text } }) })
+  return useMutation({
+    mutationFn: (message: string | { text: string; images: PastedImage[] }) =>
+      api<{ accepted: boolean; queued: boolean }>(`/api/code/sessions/${sessionId}/messages`, {
+        method: 'POST',
+        body: typeof message === 'string' || message.images.length === 0 ? { text: typeof message === 'string' ? message : message.text } : message,
+      }),
+  })
 }
 
 export function useRemoveQueued(sessionId: number) {
@@ -172,13 +192,13 @@ export function useCodeSession(sessionId: number) {
   const data = detail.data
   // History as a state; live events continue from it (the first one takes it over).
   const seed = useMemo(() => (data ? replay(data.events.map(fromRecord), emptyState(data.session.status, data.slashCommands, data.session.permissionMode)) : emptyState()), [data])
-  // Live state belongs to one session: the view is reused when the user switches between session tabs, and a state left over
-  // from another session (e.g. "running") must not show here.
-  const [live, setLiveFor] = useState<{ sessionId: number; state: SessionState } | null>(null)
-  const current = live?.sessionId === sessionId ? live.state : null
+  // Live state belongs to one loaded history: the view is reused when the user switches sessions, and after a reset the
+  // history starts again at seq 1. A state left over from another session or from before the reset must not show here.
+  const [live, setLiveFor] = useState<{ seed: SessionState; state: SessionState } | null>(null)
+  const current = live?.seed === seed ? live.state : null
   const state = current ?? seed
   const setLive = (update: (s: SessionState | null) => SessionState) =>
-    setLiveFor((prev) => ({ sessionId, state: update(prev?.sessionId === sessionId ? prev.state : null) }))
+    setLiveFor((prev) => ({ seed, state: update(prev?.seed === seed ? prev.state : null) }))
 
   useEffect(() => {
     if (!data) return
@@ -189,7 +209,7 @@ export function useCodeSession(sessionId: number) {
         for await (const ev of subscribeSse(`/api/code/sessions/${sessionId}/stream`, { signal: ctl.signal })) {
           const payload = eventJson<Record<string, unknown>>(ev)
           const event = { ...payload, type: ev.event, seq: Number(payload.seq) } as CodeEvent
-          setLiveFor((prev) => ({ sessionId, state: applyEvent(prev?.sessionId === sessionId ? prev.state : seed, event) }))
+          setLiveFor((prev) => ({ seed, state: applyEvent(prev?.seed === seed ? prev.state : seed, event) }))
           if (ev.event === 'status' || ev.event === 'result') void qc.invalidateQueries({ queryKey: codeKeys.sessions })
           if (ev.event === 'plan_usage') void qc.invalidateQueries({ queryKey: codeKeys.planUsage })
           if (ev.event === 'card') {
@@ -215,3 +235,6 @@ export function useCodeSession(sessionId: number) {
 
   return { detail, state, setMode }
 }
+
+export const imageUrl = (sessionId: number, imageId: number) => `/api/code/sessions/${sessionId}/images/${imageId}`
+

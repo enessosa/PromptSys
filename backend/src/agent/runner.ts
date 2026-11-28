@@ -6,7 +6,8 @@ export const PERMISSION_MODES = ['default', 'acceptEdits', 'plan', 'auto'] as co
 export type PermissionMode = (typeof PERMISSION_MODES)[number]
 
 export type AgentEvent =
-  | { type: 'user'; text: string }
+  /** `images` are the ids of pasted images (`code_images`). */
+  | { type: 'user'; text: string; images?: number[] }
   | { type: 'init'; sdkSessionId: string; model?: string; slashCommands: string[] }
   /** `parentToolUseId` is set when a subagent (started by that Agent/Task tool call) produced the event. */
   | { type: 'text'; text: string; parentToolUseId?: string }
@@ -33,7 +34,12 @@ export type AgentEvent =
   /** Plan rate-limit utilization (percent) after a turn; only for subscription logins. */
   | { type: 'plan_usage'; fiveHour?: PlanWindow; sevenDay?: PlanWindow; subscriptionType: string | null }
 
-export type QueuedMessage = { id: string; text: string }
+export type QueuedMessage = { id: string; text: string; images?: number[] }
+
+export const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'] as const
+export type ImageMediaType = (typeof IMAGE_TYPES)[number]
+/** A pasted image for the prompt; `data` is base64. */
+export type ImageInput = { mediaType: ImageMediaType; data: string }
 
 /**
  * The user's answer to a tool call that asked. `answers` fills an AskUserQuestion (question text → chosen label, several
@@ -57,6 +63,8 @@ export type CardTools = {
 export type TurnInput = {
   cwd: string
   prompt: string
+  /** Images that go with the prompt (pasted by the user). */
+  images?: ImageInput[]
   /** The SDK session id of an earlier turn: the turn continues that conversation. */
   resume?: string
   env: Record<string, string | undefined>

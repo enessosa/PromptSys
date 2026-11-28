@@ -1,12 +1,12 @@
 // The real agent: Claude Code through `@anthropic-ai/claude-agent-sdk`, using the user's local Claude Code login.
 // Everything that depends on the shape of SDK messages sits in the pure functions `mapSdkMessage` and `preToolUseDecision`.
-import { createSdkMcpServer, query, tool, type CanUseTool, type HookCallback, type PermissionMode as SdkPermissionMode, type SDKMessage } from '@anthropic-ai/claude-agent-sdk'
+import { createSdkMcpServer, query, tool, type CanUseTool, type HookCallback, type PermissionMode as SdkPermissionMode, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
 import { existsSync, realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, delimiter, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { z } from 'zod'
 import { LINK_KINDS } from '../card/schema.ts'
-import type { AgentEvent, AgentRunner, CardTools, PermissionMode, PlanWindow, TurnInput } from './runner.ts'
+import type { AgentEvent, AgentRunner, CardTools, ImageInput, PermissionMode, PlanWindow, TurnInput } from './runner.ts'
 
 const SUMMARY_LIMIT = 2000
 const MCP_SERVER = 'promptsys'
@@ -268,6 +268,32 @@ function cardServer(cardTools: CardTools) {
   })
 }
 
+/** The prompt as one user message with image blocks before the text, like a paste in the terminal. */
+export function imageMessage(prompt: string, images: ImageInput[]): SDKUserMessage {
+  return {
+    type: 'user',
+    parent_tool_use_id: null,
+    message: {
+      role: 'user',
+      content: [
+        ...images.map((image) => ({ type: 'image' as const, source: { type: 'base64' as const, media_type: image.mediaType, data: image.data } })),
+        ...(prompt.trim() ? [{ type: 'text' as const, text: prompt }] : []),
+      ],
+    },
+  }
+}
+
+/**
+ * A prompt with images goes in as a stream of one message. The stream stays open until the turn has its result (or is
+ * aborted): ending it earlier would close Claude Code's input before the answer.
+ */
+function promptWithImages(prompt: string, images: ImageInput[], finished: Promise<void>): AsyncIterable<SDKUserMessage> {
+  return (async function* () {
+    yield imageMessage(prompt, images)
+    await finished
+  })()
+}
+
 export function createSdkRunner(): AgentRunner {
   return {
     async available() {
@@ -341,8 +367,12 @@ export function createSdkRunner(): AgentRunner {
         return { behavior: 'allow', updatedInput: answer.answers ? { ...toolInput, answers: answer.answers } : toolInput }
       }
       const claudePath = requireClaude(input.env)
+      let finish: () => void = () => undefined
+      const finished = new Promise<void>((resolve) => (finish = resolve))
+      controller.signal.addEventListener('abort', () => finish(), { once: true })
+      const images = input.images ?? []
       const run = query({
-        prompt: input.prompt,
+        prompt: images.length > 0 ? promptWithImages(input.prompt, images, finished) : input.prompt,
         options: {
           cwd: input.cwd,
           ...(input.resume ? { resume: input.resume } : {}),
@@ -366,6 +396,7 @@ export function createSdkRunner(): AgentRunner {
           if (message.type === 'system' && message.subtype === 'init' && plan === undefined) plan = planUsage(run)
           yield* mapSdkMessage(message)
           if (message.type === 'result') {
+            finish()
             const usage = await contextUsage(run, message)
             if (usage) yield usage
             const tokens = usageFromResult(message)
@@ -375,6 +406,7 @@ export function createSdkRunner(): AgentRunner {
           }
         }
       } finally {
+        finish()
         unsubscribe()
         run.close()
       }

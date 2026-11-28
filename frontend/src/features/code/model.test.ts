@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { answerOf, parseQuestions, cardMatches, cardMention, splitCardRefs, isPath, applyEvent, contextBar, formatTokens, emptyState, folderName, fromRecord, nextMode, replay, slashCommandsIn, slashMatches, summarizeResult, type CodeEvent } from './model.ts'
+import { resetIn, groupTools, toolCounts, answerOf, parseQuestions, cardMatches, cardMention, splitCardRefs, isPath, applyEvent, contextBar, formatTokens, emptyState, folderName, fromRecord, nextMode, replay, slashCommandsIn, slashMatches, summarizeResult, type CodeEvent } from './model.ts'
 
 const ev = (seq: number, type: string, rest: Record<string, unknown> = {}): CodeEvent => ({ seq, type, ...rest })
 
@@ -189,7 +189,7 @@ describe('questions and queue', () => {
 
   it('keeps the latest queue and the answers of a resolved approval', () => {
     let s = applyEvent(emptyState(), { seq: 1, type: 'queue', items: [{ id: 'a', text: 'one' }, { bad: true }] })
-    expect(s.queue).toEqual([{ id: 'a', text: 'one' }])
+    expect(s.queue).toEqual([{ id: 'a', text: 'one', images: [] }])
     s = applyEvent(s, { seq: 2, type: 'queue', items: [] })
     expect(s.queue).toEqual([])
     s = applyEvent(s, { seq: 3, type: 'approval_request', approvalId: 'x', toolName: 'AskUserQuestion', input: {} })
@@ -197,3 +197,33 @@ describe('questions and queue', () => {
     expect(s.items[0]).toMatchObject({ approval: { approvalId: 'x', allow: true, answers: { 'Q?': 'A' } } })
   })
 })
+
+describe('resetIn', () => {
+  const now = Date.parse('2026-11-28T10:00:00Z')
+  it('counts down to the reset of a plan window', () => {
+    expect(resetIn('2026-11-28T12:10:00Z', now)).toBe('2h 10m')
+    expect(resetIn('2026-12-01T14:30:00Z', now)).toBe('3d 4h')
+    expect(resetIn('2026-11-28T10:00:30Z', now)).toBe('1m')
+    expect(resetIn('2026-11-28T09:00:00Z', now)).toBe('now')
+    expect(resetIn(null, now)).toBeNull()
+  })
+})
+
+describe('groupTools', () => {
+  const tool = (key: string, name: string, extra = {}) => ({ kind: 'tool' as const, key, id: key, name, input: {}, result: { isError: false, summary: '' }, ...extra })
+  it('joins two or more tool calls in a row, keeps single ones, open approvals and agents apart', () => {
+    const rows = groupTools([
+      tool('a', 'Read'),
+      tool('b', 'Read'),
+      tool('c', 'Bash'),
+      { kind: 'text', key: 't', text: 'x' },
+      tool('d', 'Read'),
+      tool('e', 'Edit', { approval: { approvalId: 'x' } }),
+      tool('f', 'Agent'),
+      tool('g', 'Grep'),
+    ])
+    expect(rows.map((r) => (r.kind === 'tools' ? r.items.map((i) => i.key).join('') : r.item.key))).toEqual(['abc', 't', 'd', 'e', 'f', 'g'])
+    expect(toolCounts([tool('a', 'Read'), tool('b', 'Read'), tool('c', 'Bash')] as never)).toBe('Read 2 · Bash')
+  })
+})
+

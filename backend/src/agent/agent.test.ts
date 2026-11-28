@@ -45,8 +45,8 @@ describe('migration 0005', () => {
     migrate(db)
     db.exec("INSERT INTO cards (title, body, kind) VALUES ('old', '', 'note')")
     db.exec('DROP INDEX idx_cards_code_session; ALTER TABLE cards DROP COLUMN code_session_id; ALTER TABLE cards DROP COLUMN origin; ALTER TABLE cards DROP COLUMN review_status')
-    db.exec('DROP TABLE code_events; DROP TABLE code_sessions; DELETE FROM schema_migrations WHERE version >= 5')
-    expect(migrate(db)).toEqual(['0005_code_mode.sql', '0006_code_permission_mode.sql'])
+    db.exec('DROP TABLE code_images; DROP TABLE code_events; DROP TABLE code_sessions; DELETE FROM schema_migrations WHERE version >= 5')
+    expect(migrate(db)).toEqual(['0005_code_mode.sql', '0006_code_permission_mode.sql', '0007_code_images.sql'])
     expect(db.prepare('SELECT title, origin, review_status, code_session_id FROM cards').all()).toEqual([
       { title: 'old', origin: null, review_status: null, code_session_id: null },
     ])
@@ -255,6 +255,63 @@ describe('turns with the fake agent', () => {
     const all = await events(a.id)
     expect(all.filter((e) => e.type === 'user').map((e) => e.payload.text)).toEqual(['edit a', 'second', 'third'])
     expect(all.filter((e) => e.type === 'queue').at(-1)!.payload.items).toEqual([])
+  })
+
+  it('stores pasted images, passes them to the agent and serves them; also while queued', async () => {
+    const { app, send, codeMode, session, waitFor, events } = setup()
+    await codeMode()
+    const s = await session()
+    const png = Buffer.from('fake png bytes').toString('base64')
+    expect((await send('POST', `/code/sessions/${s.id}/messages`, { text: '', images: [{ mediaType: 'image/png', data: png }] })).status).toBe(202)
+    await waitFor(s.id, 'idle')
+    let all = await events(s.id)
+    const user = all.find((e) => e.type === 'user')!
+    expect(user.payload).toMatchObject({ text: '', images: [expect.any(Number)] })
+    expect(all.some((e) => e.type === 'text' && e.payload.text === 'Working on:  (1 image)')).toBe(true)
+    const res = await app.request(`/api/code/sessions/${s.id}/images/${(user.payload.images as number[])[0]}`)
+    expect(res.headers.get('content-type')).toBe('image/png')
+    expect(Buffer.from(await res.arrayBuffer()).toString()).toBe('fake png bytes')
+    expect((await send('GET', `/code/sessions/${s.id}/images/999`)).body.error.code).toBe('image_not_found')
+
+    await send('POST', `/code/sessions/${s.id}/messages`, { text: 'edit' })
+    await waitFor(s.id, 'waiting_approval')
+    await send('POST', `/code/sessions/${s.id}/messages`, { text: 'look', images: [{ mediaType: 'image/jpeg', data: png }, { mediaType: 'image/png', data: png }] })
+    const request = (await events(s.id)).filter((e) => e.type === 'approval_request').at(-1)!
+    await send('POST', `/code/sessions/${s.id}/approvals/${request.payload.approvalId}`, { allow: true })
+    for (let i = 0; i < 200 && !(await events(s.id)).some((e) => e.payload.text === 'Working on: look (2 images)'); i++) await new Promise((r) => setTimeout(r, 5))
+    all = await events(s.id)
+    expect(all.filter((e) => e.type === 'user').at(-1)!.payload.images).toHaveLength(2)
+  })
+
+  it('rejects an empty message, unknown image types and non-base64 data', async () => {
+    const { send, codeMode, session } = setup()
+    await codeMode()
+    const s = await session()
+    for (const body of [{ text: '' }, { text: 'x', images: [{ mediaType: 'image/bmp', data: 'AAAA' }] }, { text: 'x', images: [{ mediaType: 'image/png', data: 'not base64!' }] }]) {
+      expect((await send('POST', `/code/sessions/${s.id}/messages`, body)).status).toBe(400)
+    }
+  })
+
+  it('resets a session: history, images and the conversation go, title, folder, mode and cards stay', async () => {
+    const { send, codeMode, session, waitFor, events } = setup()
+    await codeMode()
+    const s = await session(undefined, 'Keep me')
+    await send('PATCH', `/code/sessions/${s.id}`, { permissionMode: 'acceptEdits' })
+    await send('POST', `/code/sessions/${s.id}/messages`, { text: 'hello', images: [{ mediaType: 'image/png', data: 'AAAA' }] })
+    await waitFor(s.id, 'idle')
+    const image = (await events(s.id)).find((e) => e.type === 'user')!.payload.images as number[]
+    const cardsBefore = (await send('GET', `/code/sessions/${s.id}/cards`)).body.length
+    const reset = await send('POST', `/code/sessions/${s.id}/reset`)
+    expect(reset.body).toMatchObject({ id: s.id, title: 'Keep me', projectPath: s.projectPath, permissionMode: 'acceptEdits', status: 'idle' })
+    expect(await events(s.id)).toEqual([])
+    expect((await send('GET', `/code/sessions/${s.id}/images/${image[0]}`)).status).toBe(404)
+    expect((await send('GET', `/code/sessions/${s.id}/cards`)).body.length).toBe(cardsBefore)
+    await send('POST', `/code/sessions/${s.id}/messages`, { text: 'again' })
+    await waitFor(s.id, 'idle')
+    const after = await events(s.id)
+    expect(after[0]).toMatchObject({ seq: 1, type: 'user' })
+    // A new conversation: the fake runner starts a new SDK session instead of resuming.
+    expect(after.find((e) => e.type === 'init')!.payload.sdkSessionId).not.toBe('fake-1')
   })
 
   it('empties the queue when the turn is stopped', async () => {

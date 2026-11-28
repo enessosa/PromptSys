@@ -13,7 +13,7 @@
 @keyframes pulse { 50% { opacity: 0.35; } }
 @media (prefers-reduced-motion: reduce) { .dot[data-status='running'] { animation: none; } }
 
-.session { display: flex; height: 100%; min-height: 0; }
+.session { position: relative; display: flex; height: 100%; min-height: 0; container-type: inline-size; }
 .main { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
 .head { display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-bottom: 1px solid var(--ps-border); }
 .path { min-width: 0; overflow: hidden; color: var(--ps-text-muted); font-family: var(--ps-font-mono); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
@@ -118,6 +118,7 @@
 .agentHead { display: flex; align-items: center; gap: 6px; width: 100%; padding: 6px 8px; border: 0; background: transparent; color: inherit; font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
 .agentTitle { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .agentDot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--ps-ok); }
+.agentDot[data-status='stopped'] { background: transparent; border: 1px solid var(--ps-text-muted); }
 .agentDot[data-status='running'] { background: var(--ps-accent); animation: agentPulse 1.2s ease-in-out infinite; }
 .agentDot[data-status='error'] { background: var(--ps-danger); }
 @keyframes agentPulse { 50% { opacity: 0.3; } }
@@ -147,3 +148,31 @@
 .answers div { display: flex; gap: 8px; }
 .answers dt { color: var(--ps-text-muted); }
 .answers dd { margin: 0; }
+
+.attachments { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 10px 16px 0; border-top: 1px solid var(--ps-border); list-style: none; }
+.attachments li { position: relative; }
+.attachments img { display: block; width: 64px; height: 64px; object-fit: cover; border: 1px solid var(--ps-border); border-radius: 6px; }
+.attachments button { position: absolute; top: -6px; right: -6px; display: grid; place-items: center; width: 18px; height: 18px; padding: 0; border: 1px solid var(--ps-border); border-radius: 50%; background: var(--ps-bg-raised); color: var(--ps-text); cursor: pointer; }
+.userImages { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
+.userImages img { max-width: 240px; max-height: 180px; border: 1px solid var(--ps-border); border-radius: 6px; }
+.attachments + .composer { border-top: 0; }
+
+.groupHead { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; padding: 5px 10px; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.groupItems { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0 8px 8px; list-style: none; }
+.thinking { max-width: 760px; margin: 10px auto 0; color: var(--ps-text-muted); font-size: 13px; animation: thinkingBlink 1.4s ease-in-out infinite; }
+@keyframes thinkingBlink { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .thinking { animation: none; } }
+
+.planWindow { white-space: nowrap; }
+.planReset { color: var(--ps-text-muted); font-size: 0.92em; }
+
+/* Narrow windows (e.g. half a laptop screen): the side panels get narrower, then float over the chat instead of squeezing it. */
+@container (max-width: 900px) {
+  .panel { width: 230px; }
+  .changes { width: min(340px, 45cqw); }
+}
+@container (max-width: 640px) {
+  .panel { position: absolute; top: 0; right: 0; bottom: 0; z-index: 6; width: min(300px, 85cqw); box-shadow: -8px 0 24px rgb(0 0 0 / 35%); }
+  .composer { padding: 8px 10px 10px; }
+  .scroll { padding-left: 10px; padding-right: 10px; }
+}

@@ -1,11 +1,11 @@
-import { useState, type ReactNode } from 'react'
+import { memo, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Button } from '@primer/react'
 import Markdown, { type Components } from 'react-markdown'
 import { AlertIcon, CheckIcon, InfoIcon, ChevronDownIcon, ChevronRightIcon, XIcon } from '@primer/octicons-react'
 import { makeTab, useWorkspace } from '../../state/workspace.ts'
 import { cardLabel } from '../cards/model.ts'
 import { CardRefChip } from '../chat/CitationChip.tsx'
-import { describeInput, isAgentTool, parseQuestions, planText, splitCardRefs, isPath, isPathInput, summarizeResult, type ApprovalReply, type TimelineItem, type ToolItem } from './model.ts'
+import { describeInput, groupTools, isAgentTool, parseQuestions, toolCounts, planText, splitCardRefs, isPath, isPathInput, summarizeResult, type ApprovalReply, type TimelineItem, type ToolItem } from './model.ts'
 import { PlanApproval, QuestionForm } from './Questions.tsx'
 import { codeComponents, rehypeCode, remarkMarkdown } from '../../components/codeMarkdown.ts'
 import prose from '../../components/prose.module.css'
@@ -21,6 +21,8 @@ type Props = {
   availableCommands?: string[]
   /** Opens the Agents tab with this agent expanded. */
   onShowAgent?: (id: string) => void
+  /** URL of a pasted image of the session. */
+  imageSrc?: (imageId: number) => string
 }
 
 const pretty = (v: unknown) => {
@@ -126,58 +128,120 @@ export function ToolRow({ item, onApproval, approvalBusy, compact = false, onSho
   )
 }
 
-export function Timeline({ items, onApproval, approvalBusy, onCommand, availableCommands = [], onShowAgent }: Props) {
+/** A burst of tool calls as one line ("5 tool calls · Read 3 · Bash 2"), expandable to the single rows. */
+function ToolGroup({ items, onApproval, approvalBusy }: { items: ToolItem[]; onApproval: Props['onApproval']; approvalBusy: boolean }) {
+  const [open, setOpen] = useState(false)
+  const running = items.some((i) => !i.result)
+  const failed = items.filter((i) => i.result?.isError).length
+  return (
+    <li className={styles.tool} role="group" aria-label={`${items.length} tool calls`}>
+      <button type="button" className={styles.groupHead} aria-expanded={open} onClick={() => setOpen(!open)}>
+        {open ? <ChevronDownIcon size={12} /> : <ChevronRightIcon size={12} />}
+        <span className={styles.toolName}>{items.length} tool calls</span>
+        <span className={styles.toolInput}>{toolCounts(items)}</span>
+        {running && <span className={styles.pending}>running…</span>}
+        {failed > 0 && <span className={styles.failed}>{failed} failed</span>}
+      </button>
+      {open && (
+        <ol className={styles.groupItems}>
+          {items.map((item) => (
+            <ToolRow key={item.key} item={item} compact onApproval={onApproval} approvalBusy={approvalBusy} />
+          ))}
+        </ol>
+      )}
+    </li>
+  )
+}
+
+type RowProps = { item: TimelineItem; handlers: Handlers; approvalBusy: boolean; availableCommands: string[] }
+type Handlers = Pick<Props, 'onApproval' | 'onCommand' | 'onShowAgent' | 'imageSrc'>
+
+/** One timeline entry. Memoised: typing in the input field or a new event must not render (and parse) every earlier entry again. */
+const TimelineEntry = memo(function TimelineEntry({ item, handlers, approvalBusy, availableCommands }: RowProps) {
   const openTab = useWorkspace((s) => s.openTab)
+  const { onApproval, onCommand, onShowAgent, imageSrc } = handlers
+  switch (item.kind) {
+    case 'user':
+      return (
+        <li className={styles.user}>
+          {imageSrc && item.images.length > 0 && (
+            <span className={styles.userImages}>
+              {item.images.map((id) => (
+                <img key={id} src={imageSrc(id)} alt={`Pasted image ${id}`} loading="lazy" />
+              ))}
+            </span>
+          )}
+          {splitCardRefs(item.text).map((part, i) => (typeof part === 'string' ? part : <CardRefChip key={i} cardId={part.cardId} />))}
+        </li>
+      )
+    case 'text':
+      return (
+        <li className={`${styles.text} ${prose.prose}`}>
+          <Markdown remarkPlugins={remarkPlugins} rehypePlugins={rehypeCode} components={markdownComponents}>{item.text}</Markdown>
+        </li>
+      )
+    case 'tool':
+      return <ToolRow item={item} onApproval={onApproval} approvalBusy={approvalBusy} onShowAgent={onShowAgent} />
+    case 'card':
+      return (
+        <li className={styles.chipRow}>
+          <button type="button" className={styles.chip} aria-label={`Card ${cardLabel(item.cardId)} ${item.action}`} onClick={() => openTab(makeTab('card', item.cardId))}>
+            {cardLabel(item.cardId)}
+          </button>
+          <span className={styles.note}>card {item.action}</span>
+        </li>
+      )
+    case 'notice':
+      return (
+        <li className={styles.notice} role="note">
+          <InfoIcon size={14} />
+          <span className={styles.noticeText}>{item.text}</span>
+          {onCommand &&
+            item.commands
+              .filter((command) => availableCommands.includes(command))
+              .map((command) => (
+                <Button key={command} size="small" onClick={() => onCommand(command)}>
+                  Run /{command}
+                </Button>
+              ))}
+        </li>
+      )
+    case 'error':
+      return (
+        <li className={styles.errorItem} role="alert">
+          <AlertIcon size={14} /> {item.message}
+        </li>
+      )
+  }
+})
+
+const MemoGroup = memo(ToolGroup)
+
+export function Timeline({ items, onApproval, approvalBusy, onCommand, availableCommands = [], onShowAgent, imageSrc }: Props) {
+  // The callbacks change on every render of the session view; the rows get stable ones that call the latest.
+  const latest = useRef<Handlers>({ onApproval, onCommand, onShowAgent, imageSrc })
+  useLayoutEffect(() => {
+    latest.current = { onApproval, onCommand, onShowAgent, imageSrc }
+  })
+  const handlers = useMemo<Handlers>(
+    () => ({
+      onApproval: (id, reply) => latest.current.onApproval(id, reply),
+      onCommand: (command) => latest.current.onCommand?.(command),
+      onShowAgent: (id) => latest.current.onShowAgent?.(id),
+      imageSrc: (id) => latest.current.imageSrc?.(id) ?? '',
+    }),
+    [],
+  )
+  const rows = useMemo(() => groupTools(items), [items])
   return (
     <ol className={styles.timeline} aria-label="Timeline">
-      {items.map((item) => {
-        switch (item.kind) {
-          case 'user':
-            return (
-              <li key={item.key} className={styles.user}>
-                {splitCardRefs(item.text).map((part, i) => (typeof part === 'string' ? part : <CardRefChip key={i} cardId={part.cardId} />))}
-              </li>
-            )
-          case 'text':
-            return (
-              <li key={item.key} className={`${styles.text} ${prose.prose}`}>
-                <Markdown remarkPlugins={remarkPlugins} rehypePlugins={rehypeCode} components={markdownComponents}>{item.text}</Markdown>
-              </li>
-            )
-          case 'tool':
-            return <ToolRow key={item.key} item={item} onApproval={onApproval} approvalBusy={approvalBusy} onShowAgent={onShowAgent} />
-          case 'card':
-            return (
-              <li key={item.key} className={styles.chipRow}>
-                <button type="button" className={styles.chip} aria-label={`Card ${cardLabel(item.cardId)} ${item.action}`} onClick={() => openTab(makeTab('card', item.cardId))}>
-                  {cardLabel(item.cardId)}
-                </button>
-                <span className={styles.note}>card {item.action}</span>
-              </li>
-            )
-          case 'notice':
-            return (
-              <li key={item.key} className={styles.notice} role="note">
-                <InfoIcon size={14} />
-                <span className={styles.noticeText}>{item.text}</span>
-                {onCommand &&
-                  item.commands
-                    .filter((command) => availableCommands.includes(command))
-                    .map((command) => (
-                      <Button key={command} size="small" onClick={() => onCommand(command)}>
-                        Run /{command}
-                      </Button>
-                    ))}
-              </li>
-            )
-          case 'error':
-            return (
-              <li key={item.key} className={styles.errorItem} role="alert">
-                <AlertIcon size={14} /> {item.message}
-              </li>
-            )
-        }
-      })}
+      {rows.map((row) =>
+        row.kind === 'tools' ? (
+          <MemoGroup key={row.key} items={row.items} onApproval={handlers.onApproval} approvalBusy={approvalBusy} />
+        ) : (
+          <TimelineEntry key={row.item.key} item={row.item} handlers={handlers} approvalBusy={approvalBusy} availableCommands={availableCommands} />
+        ),
+      )}
     </ol>
   )
 }

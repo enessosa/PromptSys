@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { idSchema, parse, parseBody } from '../common/validation.ts'
 import { createSettingsRepository, requireMode } from '../settings/index.ts'
 import type { AgentRunner } from './runner.ts'
-import { PERMISSION_MODES } from './runner.ts'
+import { IMAGE_TYPES, PERMISSION_MODES } from './runner.ts'
 import { createAgentService, type AgentService } from './service.ts'
 
 const PING_INTERVAL_MS = 15_000
@@ -16,7 +16,17 @@ const updateSchema = z
   .partial()
   .strict()
   .refine((v) => Object.keys(v).length > 0, 'At least one field is required')
-const messageSchema = z.object({ text: z.string().trim().min(1).max(100_000) })
+/** Like the API: at most 5 MB per image (base64 is about 4/3 of that). */
+const IMAGE_BASE64_MAX = Math.ceil((5 * 1024 * 1024 * 4) / 3) + 4
+const messageSchema = z
+  .object({
+    text: z.string().trim().max(100_000),
+    images: z
+      .array(z.object({ mediaType: z.enum(IMAGE_TYPES), data: z.string().min(1).max(IMAGE_BASE64_MAX).regex(/^[A-Za-z0-9+/]+={0,2}$/, 'not base64') }))
+      .max(10)
+      .optional(),
+  })
+  .refine((m) => m.text !== '' || (m.images?.length ?? 0) > 0, 'Text or an image is required')
 const approvalSchema = z.object({
   allow: z.boolean(),
   message: z.string().max(10_000).optional(),
@@ -61,6 +71,7 @@ export function agentRoutes(db: DatabaseSync, runner: AgentRunner, service: Agen
     if (permissionMode !== undefined) service.setPermissionMode(id, permissionMode)
     return c.json((await service.get(id)).session)
   })
+  routes.post('/code/sessions/:id/reset', async (c) => c.json(await service.reset(idParam(c))))
   routes.get('/code/sessions/:id/git', async (c) => c.json(await service.git(idParam(c))))
   routes.get('/code/sessions/:id/changes', async (c) => c.json(await service.changes(idParam(c))))
   routes.delete('/code/sessions/:id', async (c) => {
@@ -70,8 +81,13 @@ export function agentRoutes(db: DatabaseSync, runner: AgentRunner, service: Agen
 
   routes.post('/code/sessions/:id/messages', async (c) => {
     const id = idParam(c)
-    const { queued } = service.sendMessage(id, (await parseBody(c, messageSchema)).text)
+    const { text, images } = await parseBody(c, messageSchema)
+    const { queued } = service.sendMessage(id, text, images)
     return c.json({ accepted: true, queued }, 202)
+  })
+  routes.get('/code/sessions/:id/images/:imageId', (c) => {
+    const { mediaType, data } = service.image(idParam(c), idParam(c, 'imageId'))
+    return c.body(new Uint8Array(data), 200, { 'content-type': mediaType, 'cache-control': 'private, max-age=31536000, immutable' })
   })
   routes.delete('/code/sessions/:id/queue/:queueId', (c) => {
     service.removeQueued(idParam(c), c.req.param('queueId'))

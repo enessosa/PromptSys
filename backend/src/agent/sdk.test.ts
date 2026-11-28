@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { mkdtempSync, mkdirSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { contextFromResult, findClaudeExecutable, hookSystemMessage, isInsideProject, mapSdkMessage, planUsageFromResponse, preToolUseDecision, sdkPermissionMode, usageFromResult } from './sdk.ts'
+import { imageMessage, contextFromResult, findClaudeExecutable, hookSystemMessage, isInsideProject, mapSdkMessage, planUsageFromResponse, preToolUseDecision, sdkPermissionMode, usageFromResult } from './sdk.ts'
 
 // Hand-written message shapes (only the fields the mapping reads).
 const msg = (m: unknown) => m as SDKMessage
@@ -209,3 +209,14 @@ describe('hookSystemMessage', () => {
     expect(hookSystemMessage('')).toBeNull()
   })
 })
+
+describe('imageMessage', () => {
+  it('puts the images before the text and leaves out an empty text', () => {
+    expect(imageMessage('look', [{ mediaType: 'image/png', data: 'AAAA' }]).message).toEqual({
+      role: 'user',
+      content: [{ type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AAAA' } }, { type: 'text', text: 'look' }],
+    })
+    expect(imageMessage(' ', [{ mediaType: 'image/gif', data: 'AA==' }]).message.content).toHaveLength(1)
+  })
+})
+

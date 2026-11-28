@@ -7,7 +7,7 @@ import type { Card, LinkKind } from '../card/schema.ts'
 import { AppError } from '../common/errors.ts'
 import { createSettingsRepository } from '../settings/index.ts'
 import { gitChanges, gitInfo } from './git.ts'
-import type { AgentEvent, AgentRunner, ApprovalAnswer, CardTools, PermissionMode, QueuedMessage } from './runner.ts'
+import type { AgentEvent, AgentRunner, ApprovalAnswer, CardTools, ImageInput, ImageMediaType, PermissionMode, QueuedMessage } from './runner.ts'
 
 type SessionStatus = Extract<AgentEvent, { type: 'status' }>['status']
 
@@ -229,7 +229,7 @@ export function createAgentService(db: DatabaseSync, runner: AgentRunner) {
     }
   }
 
-  async function runTurn(sessionId: number, turn: ActiveTurn, prompt: string): Promise<void> {
+  async function runTurn(sessionId: number, turn: ActiveTurn, prompt: string, images: ImageInput[]): Promise<void> {
     const session = toSession(row(sessionId))
     const sdkSessionId = (row(sessionId).sdk_session_id as string | null) ?? undefined
     const setStatus = (status: SessionStatus) => emit(sessionId, { type: 'status', status })
@@ -238,6 +238,7 @@ export function createAgentService(db: DatabaseSync, runner: AgentRunner) {
       const events = runner.runTurn({
         cwd: session.projectPath,
         prompt,
+        ...(images.length > 0 ? { images } : {}),
         ...(sdkSessionId ? { resume: sdkSessionId } : {}),
         env: envFor(),
         cardTools: cardToolsFor(sessionId),
@@ -289,16 +290,29 @@ export function createAgentService(db: DatabaseSync, runner: AgentRunner) {
     setStatus(turn.controller.signal.aborted ? 'stopped' : failed ? 'error' : 'idle')
   }
 
-  function startTurn(id: number, text: string): void {
+  /** Stores pasted images of a session; returns their ids. */
+  function storeImages(id: number, images: ImageInput[]): number[] {
+    const insert = db.prepare('INSERT INTO code_images (session_id, media_type, data) VALUES (?, ?, ?)')
+    return images.map((image) => Number(insert.run(id, image.mediaType, Buffer.from(image.data, 'base64')).lastInsertRowid))
+  }
+
+  function loadImages(id: number, ids: number[]): ImageInput[] {
+    return ids.flatMap((imageId) => {
+      const found = db.prepare('SELECT media_type, data FROM code_images WHERE id = ? AND session_id = ?').get(imageId, id)
+      return found ? [{ mediaType: found.media_type as ImageMediaType, data: Buffer.from(found.data as Uint8Array).toString('base64') }] : []
+    })
+  }
+
+  function startTurn(id: number, text: string, imageIds: number[] = []): void {
     const session = toSession(row(id))
     // A slash command has to stay the first thing in the prompt, so it gets no card block.
     const block = text.startsWith('/') ? '' : bindingBlock(db, session.projectPath, text)
     const prompt = block ? `${block}\n\n${text}` : text
     const turn: ActiveTurn = { controller: new AbortController(), pending: new Map(), done: Promise.resolve(), modeListeners: new Set() }
     active.set(id, turn)
-    emit(id, { type: 'user', text })
+    emit(id, { type: 'user', text, ...(imageIds.length > 0 ? { images: imageIds } : {}) })
     emit(id, { type: 'status', status: 'running' })
-    turn.done = runTurn(id, turn, prompt)
+    turn.done = runTurn(id, turn, prompt, loadImages(id, imageIds))
       .catch((err: unknown) => console.error('Agent turn failed', err))
       .finally(() => {
         if (active.get(id) === turn) active.delete(id)
@@ -306,7 +320,7 @@ export function createAgentService(db: DatabaseSync, runner: AgentRunner) {
         const [next, ...rest] = queueOf(id)
         if (next && !active.has(id) && !turn.controller.signal.aborted) {
           setQueue(id, rest)
-          startTurn(id, next.text)
+          startTurn(id, next.text, next.images)
         }
       })
   }
@@ -379,16 +393,40 @@ export function createAgentService(db: DatabaseSync, runner: AgentRunner) {
      * Starts a turn in the background (events arrive through `subscribe` and `get`). While a turn runs, the message is queued
      * instead, like in the terminal: queued messages run one after another when the turn ends.
      */
-    sendMessage(id: number, text: string): { queued: boolean } {
+    sendMessage(id: number, text: string, images: ImageInput[] = []): { queued: boolean } {
       row(id)
       if (active.has(id)) {
         const queue = queueOf(id)
         if (queue.length >= QUEUE_LIMIT) throw new AppError(409, 'queue_full', `At most ${QUEUE_LIMIT} messages can wait.`)
-        setQueue(id, [...queue, { id: crypto.randomUUID(), text }])
+        const ids = storeImages(id, images)
+        setQueue(id, [...queue, { id: crypto.randomUUID(), text, ...(ids.length > 0 ? { images: ids } : {}) }])
         return { queued: true }
       }
-      startTurn(id, text)
+      startTurn(id, text, storeImages(id, images))
       return { queued: false }
+    },
+
+    /** A pasted image of the session (for the timeline). */
+    image(id: number, imageId: number): { mediaType: string; data: Uint8Array } {
+      const found = db.prepare('SELECT media_type, data FROM code_images WHERE id = ? AND session_id = ?').get(imageId, id)
+      if (!found) throw new AppError(404, 'image_not_found', `Image ${imageId} not found`)
+      return { mediaType: found.media_type as string, data: found.data as Uint8Array }
+    },
+
+    /**
+     * Clears the chat: stops a running turn and deletes the history and pasted images; the next message starts a new
+     * conversation. Title, folder and permission mode stay, and so do the cards the session recorded.
+     */
+    async reset(id: number): Promise<CodeSession> {
+      row(id)
+      await this.stop(id)
+      queues.delete(id)
+      db.prepare('DELETE FROM code_events WHERE session_id = ?').run(id)
+      db.prepare('DELETE FROM code_images WHERE session_id = ?').run(id)
+      db.prepare(`UPDATE code_sessions SET sdk_session_id = NULL, status = 'idle', updated_at = ${NOW} WHERE id = ?`).run(id)
+      // Like a new session: the SessionStart hooks run again and their messages are shown.
+      await probe(id, toSession(row(id)).projectPath, true)
+      return toSession(row(id))
     },
 
     /** Takes a queued message back before it runs. */

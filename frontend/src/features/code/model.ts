@@ -17,7 +17,7 @@ export type ToolItem = {
 /** The user's reply to a tool call that asked: allow/deny, answers of a question form, the mode chosen with a plan, a note. */
 export type ApprovalReply = { allow: boolean; message?: string; answers?: Record<string, string>; mode?: PermissionMode }
 
-export type QueuedMessage = { id: string; text: string }
+export type QueuedMessage = { id: string; text: string; images: number[] }
 
 export type Question = { question: string; header: string; multiSelect: boolean; options: { label: string; description: string }[] }
 
@@ -48,7 +48,8 @@ export const planText = (input: unknown): string => (typeof input === 'object' &
 /** What a subagent did: its own text and tool rows. */
 export type AgentItem = { kind: 'text'; key: string; text: string } | ToolItem
 
-export type AgentStatus = 'running' | 'done' | 'error'
+/** `stopped` = the turn ended (or was interrupted) before the agent reported a result. */
+export type AgentStatus = 'running' | 'done' | 'error' | 'stopped'
 
 /** A subagent started by an Agent (older: Task) tool call of the main agent. `id` is that tool call's id. */
 export type AgentEntry = { id: string; description: string; subagentType: string; prompt: string; status: AgentStatus; items: AgentItem[]; result?: string }
@@ -56,7 +57,8 @@ export type AgentEntry = { id: string; description: string; subagentType: string
 export const isAgentTool = (name: string) => name === 'Agent' || name === 'Task'
 
 export type TimelineItem =
-  | { kind: 'user'; key: string; text: string }
+  /** `images` are ids of pasted images, served by `/api/code/sessions/:id/images/:imageId`. */
+  | { kind: 'user'; key: string; text: string; images: number[] }
   | { kind: 'text'; key: string; text: string }
   | ToolItem
   | { kind: 'card'; key: string; cardId: number; action: 'created' | 'linked' }
@@ -110,6 +112,7 @@ function newAgent(id: string, input: unknown): AgentEntry {
 const sameInput = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 
 const str = (v: unknown) => (typeof v === 'string' ? v : '')
+const ids = (v: unknown): number[] => (Array.isArray(v) ? v.filter((x): x is number => Number.isInteger(x)) : [])
 
 /** Folds an event of a subagent (it has a `parentToolUseId`) into that agent's items. Unknown agents are ignored. */
 function applyAgentEvent(state: SessionState, next: SessionState, ev: CodeEvent, parent: string, key: string): SessionState {
@@ -141,7 +144,7 @@ export function applyEvent(state: SessionState, ev: CodeEvent): SessionState {
   if (parent && (ev.type === 'text' || ev.type === 'tool_call' || ev.type === 'tool_result')) return applyAgentEvent(state, next, ev, parent, key)
   switch (ev.type) {
     case 'user':
-      return { ...next, items: [...state.items, { kind: 'user', key, text: str(ev.text) }] }
+      return { ...next, items: [...state.items, { kind: 'user', key, text: str(ev.text), images: ids(ev.images) }] }
     case 'init': {
       const cmds = Array.isArray(ev.slashCommands) ? ev.slashCommands.filter((c): c is string => typeof c === 'string') : state.slashCommands
       return { ...next, slashCommands: cmds, model: typeof ev.model === 'string' ? ev.model : state.model }
@@ -187,12 +190,17 @@ export function applyEvent(state: SessionState, ev: CodeEvent): SessionState {
     case 'queue':
       return {
         ...next,
-        queue: Array.isArray(ev.items) ? ev.items.flatMap((m) => (typeof m === 'object' && m !== null && typeof m.id === 'string' && typeof m.text === 'string' ? [{ id: m.id as string, text: m.text as string }] : [])) : [],
+        queue: Array.isArray(ev.items) ? ev.items.flatMap((m) => (typeof m === 'object' && m !== null && typeof m.id === 'string' && typeof m.text === 'string' ? [{ id: m.id as string, text: m.text as string, images: ids(m.images) }] : [])) : [],
       }
     case 'card':
       return { ...next, items: [...state.items, { kind: 'card', key, cardId: Number(ev.cardId), action: ev.action === 'linked' ? 'linked' : 'created' }] }
-    case 'status':
-      return { ...next, status: ev.status as CodeSessionStatus }
+    case 'status': {
+      const status = ev.status as CodeSessionStatus
+      // When the turn is over, an agent without a result will not report one any more.
+      const over = status !== 'running' && status !== 'waiting_approval'
+      const agents = over && state.agents.some((a) => a.status === 'running') ? state.agents.map((a) => (a.status === 'running' ? { ...a, status: 'stopped' as const } : a)) : state.agents
+      return { ...next, status, agents }
+    }
     case 'mode':
       return { ...next, permissionMode: PERMISSION_MODES.includes(ev.mode as PermissionMode) ? (ev.mode as PermissionMode) : state.permissionMode }
     case 'context':
@@ -337,3 +345,66 @@ export function slashCommandsIn(text: string): string[] {
   for (const match of text.matchAll(/(?:^|[\s(])\/([a-z][\w:-]*)(?=$|[\s.,;:!?)])/gi)) found.add(match[1]!)
   return [...found]
 }
+
+export const PASTE_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'] as const
+export type PastedImage = { mediaType: (typeof PASTE_IMAGE_TYPES)[number]; data: string }
+/** The API takes images up to 5 MB. */
+export const IMAGE_MAX_BYTES = 5 * 1024 * 1024
+export const IMAGE_MAX_COUNT = 10
+
+export const isPasteImageType = (type: string): type is PastedImage['mediaType'] => (PASTE_IMAGE_TYPES as readonly string[]).includes(type)
+
+/** "data:image/png;base64,AAAA" → { mediaType, data }; null for other data URLs. */
+export function imageFromDataUrl(url: string): PastedImage | null {
+  const m = /^data:([^;,]+);base64,(.+)$/.exec(url)
+  return m && isPasteImageType(m[1]) ? { mediaType: m[1], data: m[2] } : null
+}
+
+export type TimelineRow = { kind: 'item'; item: TimelineItem } | { kind: 'tools'; key: string; items: ToolItem[] }
+
+/** Tool rows that can sit in a group: no open question, no plan, no subagent (those keep their own row). */
+const groupable = (i: TimelineItem): i is ToolItem =>
+  i.kind === 'tool' && !(i.approval && i.approval.allow === undefined) && i.name !== 'AskUserQuestion' && i.name !== 'ExitPlanMode' && !isAgentTool(i.name)
+
+/** Joins two or more tool calls in a row into one collapsible group, so a burst of commands takes one line. */
+export function groupTools(items: TimelineItem[]): TimelineRow[] {
+  const rows: TimelineRow[] = []
+  let run: ToolItem[] = []
+  const flush = () => {
+    if (run.length >= 2) rows.push({ kind: 'tools', key: `g-${run[0].key}`, items: run })
+    else for (const item of run) rows.push({ kind: 'item', item })
+    run = []
+  }
+  for (const item of items) {
+    if (groupable(item)) run.push(item)
+    else {
+      flush()
+      rows.push({ kind: 'item', item })
+    }
+  }
+  flush()
+  return rows
+}
+
+/** "Read 3 · Bash 2" for a tool group. */
+export function toolCounts(items: ToolItem[]): string {
+  const counts = new Map<string, number>()
+  for (const i of items) counts.set(i.name, (counts.get(i.name) ?? 0) + 1)
+  return [...counts].map(([name, n]) => (n > 1 ? `${name} ${n}` : name)).join(' · ')
+}
+
+/** Time until a plan window resets: "2h 10m", "3d 4h", "12m"; "now" once it has passed; null without a time. */
+export function resetIn(resetsAt: string | null | undefined, now: number): string | null {
+  if (!resetsAt) return null
+  const ms = Date.parse(resetsAt) - now
+  if (Number.isNaN(ms)) return null
+  if (ms <= 0) return 'now'
+  const minutes = Math.ceil(ms / 60_000)
+  const d = Math.floor(minutes / 1440)
+  const h = Math.floor((minutes % 1440) / 60)
+  const m = minutes % 60
+  if (d > 0) return `${d}d ${h}h`
+  if (h > 0) return `${h}h ${m}m`
+  return `${m}m`
+}
+

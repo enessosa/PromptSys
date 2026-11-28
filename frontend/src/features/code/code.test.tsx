@@ -48,6 +48,18 @@ describe('session list', () => {
     expect(selectActiveTab(useWorkspace.getState())?.id).toBe('code:2')
   })
 
+  it('clears the chat of a session after confirming', async () => {
+    const { calls } = mockFetch({ ...status, 'GET /api/code/sessions': { body: [session(1, 'Alpha')] }, 'POST /api/code/sessions/1/reset': { body: session(1, 'Alpha') } })
+    const user = userEvent.setup()
+    renderWithProviders(<SessionList />)
+    await user.click(await screen.findByRole('button', { name: 'Clear chat of Alpha' }))
+    const dialog = await screen.findByRole('alertdialog')
+    expect(dialog).toHaveTextContent('Title, folder, permission mode and cards stay')
+    await user.click(within(dialog).getByRole('button', { name: 'Clear chat' }))
+    await waitFor(() => expect(calls.some((c) => c.key === 'POST /api/code/sessions/1/reset')).toBe(true))
+    expect(selectActiveTab(useWorkspace.getState())?.id).toBe('code:1')
+  })
+
   it('shows the account-wide plan limits once, below the sessions', async () => {
     mockFetch({
       ...status,
@@ -390,6 +402,62 @@ describe('session view', () => {
     renderWithProviders(<CodeSessionView sessionId={1} />)
     const line = await screen.findByRole('group', { name: 'Session status' })
     expect(line).not.toHaveTextContent('main')
+  })
+
+  it('groups tool calls in a row and shows "Thinking…" while the agent runs', async () => {
+    const call = (seq: number, id: string, name: string) => rec(seq, 'tool_call', { id, name, input: { file_path: `${id}.ts` } })
+    mockFetch(sessionRoutes([rec(1, 'user', { text: 'go' }), rec(2, 'status', { status: 'running' }), call(3, 'r1', 'Read'), call(4, 'r2', 'Read'), call(5, 'b1', 'Bash')]))
+    const user = userEvent.setup()
+    renderWithProviders(<CodeSessionView sessionId={1} />)
+    const group = await screen.findByRole('group', { name: '3 tool calls' })
+    expect(group).toHaveTextContent('Read 2 · Bash')
+    expect(screen.queryByRole('group', { name: 'Tool Read' })).toBeNull()
+    await user.click(within(group).getByRole('button', { name: /3 tool calls/ }))
+    expect(within(group).getAllByRole('group', { name: 'Tool Read' })).toHaveLength(2)
+    expect(screen.getByText('Thinking…')).toBeInTheDocument()
+  })
+
+  it('lists only running agents; finished ones (also those cut off by the end of the turn) move under "Finished"', async () => {
+    const events = [
+      rec(1, 'status', { status: 'running' }),
+      rec(2, 'tool_call', { id: 'a1', name: 'Agent', input: { description: 'Done agent', subagent_type: 'x', prompt: 'p' } }),
+      rec(3, 'tool_result', { id: 'a1', isError: false, summary: 'ok' }),
+      rec(4, 'tool_call', { id: 'b1', name: 'Agent', input: { description: 'Busy agent', subagent_type: 'x', prompt: 'p' } }),
+    ]
+    mockFetch(sessionRoutes(events, [sseEvent('status', { seq: 5, status: 'idle' })]))
+    localStorage.setItem('promptsys.code.sidetab.1', 'agents')
+    const user = userEvent.setup()
+    renderWithProviders(<CodeSessionView sessionId={1} />)
+    const panel = await screen.findByRole('complementary', { name: 'Agents' })
+    // After the turn ends no agent runs any more: the list is empty, both sit under "Finished".
+    await waitFor(() => expect(within(panel).getByText('No agent is running.')).toBeInTheDocument())
+    await user.click(within(panel).getByRole('button', { name: /Finished \(2\)/ }))
+    const finished = within(panel).getByRole('list', { name: 'Finished agents' })
+    expect(finished).toHaveTextContent('Done agent')
+    expect(within(finished).getByRole('img', { name: 'Ended' })).toBeInTheDocument()
+    localStorage.removeItem('promptsys.code.sidetab.1')
+  })
+
+  it('attaches pasted images, shows them, removes one and sends them with the message', async () => {
+    const { calls } = mockFetch(
+      sessionRoutes([rec(1, 'user', { text: 'old', images: [7] })], [], { 'POST /api/code/sessions/1/messages': { status: 202, body: { accepted: true, queued: false } } }),
+    )
+    const user = userEvent.setup()
+    renderWithProviders(<CodeSessionView sessionId={1} />)
+    expect(await screen.findByRole('img', { name: 'Pasted image 7' })).toHaveAttribute('src', '/api/code/sessions/1/images/7')
+    const box = screen.getByRole('textbox', { name: 'Message' })
+    await user.click(box)
+    const png = new File([new Uint8Array([1, 2, 3])], 'a.png', { type: 'image/png' })
+    const gif = new File([new Uint8Array([4])], 'b.gif', { type: 'image/gif' })
+    await user.paste({ files: [png, gif], items: [], types: ['Files'], getData: () => '' } as unknown as DataTransfer)
+    const list = await screen.findByRole('list', { name: 'Attached images' })
+    await waitFor(() => expect(within(list).getAllByRole('img')).toHaveLength(2))
+    await user.click(within(list).getByRole('button', { name: 'Remove image 2' }))
+    await user.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() =>
+      expect(calls.find((c) => c.key === 'POST /api/code/sessions/1/messages')?.body).toEqual({ text: '', images: [{ mediaType: 'image/png', data: 'AQID' }] }),
+    )
+    await waitFor(() => expect(screen.queryByRole('list', { name: 'Attached images' })).toBeNull())
   })
 
   it('shows subagents in the Agents tab, switches tabs, expands and opens from the Show button', async () => {

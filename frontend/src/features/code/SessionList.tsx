@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import { IconButton } from '@primer/react'
-import { PencilIcon, PlusIcon, TrashIcon } from '@primer/octicons-react'
+import { PencilIcon, PlusIcon, SyncIcon, TrashIcon } from '@primer/octicons-react'
 import type { CodeSession } from '../../api/types.ts'
 import { ConfirmDialog } from '../../components/ConfirmDialog.tsx'
 import { PromptDialog } from '../../components/PromptDialog.tsx'
 import { makeTab, selectActiveTab, useWorkspace } from '../../state/workspace.ts'
 import cards from '../cards/cards.module.css'
 import chat from '../chat/chat.module.css'
-import { useCodeSessions, useCodeStatus, useDeleteSession, useRenameSession } from './hooks.ts'
+import { useCodeSessions, useCodeStatus, useDeleteSession, useRenameSession, useResetSession } from './hooks.ts'
 import { NewSessionDialog } from './NewSessionDialog.tsx'
 import { PlanUsageLine } from './PlanUsageLine.tsx'
 import { STATUS_LABEL } from './model.ts'
@@ -23,6 +23,8 @@ export function SessionList() {
   const activeId = useWorkspace((s) => selectActiveTab(s)?.id)
   const rename = useRenameSession()
   const remove = useDeleteSession()
+  const reset = useResetSession()
+  const [resetting, setResetting] = useState<CodeSession | null>(null)
   const [creating, setCreating] = useState(false)
   const [renaming, setRenaming] = useState<CodeSession | null>(null)
   const [deleting, setDeleting] = useState<CodeSession | null>(null)
@@ -56,6 +58,7 @@ export function SessionList() {
             <span className={chat.convTitle}>{s.title}</span>
             <span className={chat.convTools}>
               <IconButton icon={PencilIcon} size="small" variant="invisible" aria-label={`Rename ${s.title}`} onClick={(e) => { e.stopPropagation(); setRenaming(s) }} />
+              <IconButton icon={SyncIcon} size="small" variant="invisible" aria-label={`Clear chat of ${s.title}`} onClick={(e) => { e.stopPropagation(); setResetting(s) }} />
               <IconButton icon={TrashIcon} size="small" variant="invisible" aria-label={`Delete ${s.title}`} onClick={(e) => { e.stopPropagation(); setDeleting(s) }} />
             </span>
           </div>
@@ -64,6 +67,17 @@ export function SessionList() {
       <PlanUsageLine />
       {creating && <NewSessionDialog onClose={() => setCreating(false)} onCreated={(s) => openTab(makeTab('code', s.id))} />}
       {renaming && <PromptDialog title="Rename session" label="Title" initialValue={renaming.title} onClose={() => setRenaming(null)} onSubmit={(title) => rename.mutate({ id: renaming.id, title })} />}
+      {resetting && (
+        <ConfirmDialog
+          title="Clear chat?"
+          confirmLabel="Clear chat"
+          danger
+          onClose={() => setResetting(null)}
+          onConfirm={() => reset.mutate(resetting.id, { onSuccess: () => openTab(makeTab('code', resetting.id)) })}
+        >
+          The history of “{resetting.title}” is deleted and the agent starts a new conversation in the same folder; a running turn is stopped. Title, folder, permission mode and cards stay.
+        </ConfirmDialog>
+      )}
       {deleting && (
         <ConfirmDialog
           title="Delete session?"
