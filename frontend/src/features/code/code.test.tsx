@@ -64,10 +64,12 @@ describe('session list', () => {
     mockFetch({
       ...status,
       'GET /api/code/sessions': { body: [session(1, 'Alpha'), session(2, 'Beta')] },
-      'GET /api/code/plan-usage': { body: { fiveHour: { utilization: 34, resetsAt: null }, sevenDay: { utilization: 12, resetsAt: null }, subscriptionType: 'max', observedAt: '2026-11-24T20:00:00.000Z' } },
+      'GET /api/code/plan-usage': { body: { fiveHour: { utilization: 34, resetsAt: new Date(Date.now() + 130 * 60_000 - 1000).toISOString() }, sevenDay: { utilization: 12, resetsAt: null }, subscriptionType: 'max', observedAt: '2026-11-24T20:00:00.000Z' } },
     })
     renderWithProviders(<SessionList />)
-    expect(await screen.findByTestId('plan-usage')).toHaveTextContent('Plan limits · 5h 34% · 7d 12%')
+    const plan = await screen.findByTestId('plan-usage')
+    // One line per window, so the reset time fits a narrow sidebar.
+    expect(plan).toHaveTextContent(/Plan limits\s*5h\s*34%\s*↻ 2h 10m\s*7d\s*12%$/)
   })
 
   it('creates a session from the dialog and opens it', async () => {

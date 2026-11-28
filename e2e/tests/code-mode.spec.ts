@@ -57,7 +57,7 @@ test('claude code mode: session, echo, card, approval, review, second session, b
     const line = page.getByRole('group', { name: 'Session status' })
     await expect(line).toContainText('13%')
     await expect(line).toContainText('Tokens 75k')
-    await expect(page.getByTestId('plan-usage')).toHaveText(/^Plan limits · 5h 34% \(reset.*\) · 7d 12% \(reset/)
+    await expect(page.getByTestId('plan-usage')).toHaveText(/^Plan limits\s*5h\s*34%\s*(reset|↻ [0-9dhm ]+)\s*7d\s*12%\s*(reset|↻ [0-9dhm ]+)$/)
     await line.getByRole('combobox', { name: 'Permission mode' }).selectOption('acceptEdits')
     await box.fill('edit again')
     await page.getByRole('button', { name: 'Send' }).click()

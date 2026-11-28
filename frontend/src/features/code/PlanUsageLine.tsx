@@ -23,12 +23,18 @@ function useNow(): number {
   return now
 }
 
+/** One window as its own line: label, a small bar, the percentage and the time until it resets. */
 function Window({ label, w, now }: { label: string; w: PlanWindow; now: number }) {
   const left = resetIn(w.resetsAt, now)
+  const used = Math.max(0, Math.min(100, w.utilization))
   return (
-    <span className={styles.planWindow}>
-      {` · ${label} ${pct(w)}`}
-      {left && <span className={styles.planReset}>{left === 'now' ? ' (reset, new value after the next turn)' : ` (resets in ${left})`}</span>}
+    <span className={styles.planRow}>
+      <span className={styles.planLabel}>{label}</span>
+      <span className={styles.planBar} aria-hidden="true">
+        <i style={{ width: `${used}%` }} data-level={used >= 85 ? 'high' : used >= 60 ? 'warn' : 'ok'} />
+      </span>
+      <span className={styles.planPct}>{pct(w)}</span>
+      {left && <span className={styles.planReset} title="Time until this window resets">{left === 'now' ? 'reset' : `↻ ${left}`}</span>}
     </span>
   )
 }
@@ -39,10 +45,10 @@ export function PlanUsageLine() {
   const now = useNow()
   if (!data || (!data.fiveHour && !data.sevenDay)) return null
   return (
-    <p className={styles.planUsage} data-testid="plan-usage" title={title(data)}>
-      Plan limits
+    <div className={styles.planUsage} data-testid="plan-usage" title={title(data)}>
+      <span className={styles.planTitle}>Plan limits</span>
       {data.fiveHour && <Window label="5h" w={data.fiveHour} now={now} />}
       {data.sevenDay && <Window label="7d" w={data.sevenDay} now={now} />}
-    </p>
+    </div>
   )
 }

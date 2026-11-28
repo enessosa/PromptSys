@@ -129,7 +129,7 @@
 .agentResult { padding: 6px; border-radius: 4px; background: var(--ps-bg-sidebar); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .agentResult[data-error] { color: var(--ps-danger); }
 
-.planUsage { margin: 8px 0 0; padding: 4px 8px; color: var(--ps-text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.planUsage { display: flex; flex-direction: column; gap: 3px; margin: 8px 0 0; padding: 4px 8px 4px 12px; color: var(--ps-text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
 .suggestDetail { margin-left: 8px; color: var(--ps-text-muted); font-size: 11px; }
 
 .queue { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 6px 16px 0; list-style: none; }
@@ -163,8 +163,15 @@
 @keyframes thinkingBlink { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .thinking { animation: none; } }
 
-.planWindow { white-space: nowrap; }
-.planReset { color: var(--ps-text-muted); font-size: 0.92em; }
+.planTitle { font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; font-size: 10px; }
+.planRow { display: grid; grid-template-columns: 20px minmax(30px, 1fr) 30px auto; align-items: center; gap: 6px; white-space: nowrap; }
+.planLabel { color: var(--ps-text); }
+.planBar { height: 4px; overflow: hidden; border-radius: 2px; background: var(--ps-border); }
+.planBar i { display: block; height: 100%; background: var(--ps-ok); }
+.planBar i[data-level='warn'] { background: #d6b36b; }
+.planBar i[data-level='high'] { background: var(--ps-danger); }
+.planPct { text-align: right; color: var(--ps-text); }
+.planReset { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
 /* Narrow windows (e.g. half a laptop screen): the side panels get narrower, then float over the chat instead of squeezing it. */
 @container (max-width: 900px) {
