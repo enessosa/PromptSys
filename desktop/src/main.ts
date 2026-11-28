@@ -66,7 +66,8 @@ function createMainWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
-    minWidth: 900,
+    // Small enough for half of a laptop screen; the UI rearranges its panels for narrow windows.
+    minWidth: 560,
     minHeight: 600,
     show: false,
     backgroundColor: '#1c1d21',
@@ -78,6 +79,9 @@ function createMainWindow(): void {
     },
   })
   const win = mainWindow
+  // Windows and Linux draw the application menu as a bar inside the window. PromptSys has its own navigation and opens the
+  // settings from the UI, so the bar stays hidden; its shortcuts (Ctrl+, , reload, zoom) keep working.
+  if (process.platform !== 'darwin') win.setMenuBarVisibility(false)
   win.once('ready-to-show', () => win.show())
   win.on('closed', () => {
     if (mainWindow === win) mainWindow = undefined
@@ -235,6 +239,8 @@ function lockDownSession(): void {
 async function boot(): Promise<void> {
   log.line(`PromptSys ${app.getVersion()} starting (electron ${process.versions.electron}, node ${process.versions.node}, ${isDev ? 'dev' : 'packaged'})`)
   try {
+    // The UI comes from the local backend: an HTTP cache from an earlier version must not show an old build after an update.
+    await session.defaultSession.clearCache().catch(() => undefined)
     await startBackend()
     createMainWindow()
   } catch (err) {

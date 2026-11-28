@@ -44,6 +44,14 @@ export function createApp(deps: Dependencies): Hono {
   app.route('/api', api)
   if (deps.frontendDist) {
     const root = deps.frontendDist
+    // index.html must be checked on every start, or the window keeps an old build from its cache after an update. The files
+    // under /assets carry a content hash in their name and never change.
+    app.use('*', async (c, next) => {
+      await next()
+      const path = c.req.path
+      if (path === '/api' || path.startsWith('/api/') || c.res.status !== 200 || c.res.headers.has('cache-control')) return
+      c.res.headers.set('cache-control', path.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache')
+    })
     app.use('*', serveStatic({ root }))
     // Client-side routes (`/chat/c1`, `/graph`) are not files: answer GETs below with index.html, but never for /api or for
     // paths that look like a missing file (`/assets/x.js`), which should stay a 404.

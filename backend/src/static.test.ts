@@ -25,6 +25,8 @@ describe('serving the built frontend', () => {
       const res = await get(app, path)
       expect(res.status).toBe(200)
       expect(await res.text()).toContain('<title>PromptSys</title>')
+      // Checked on every load, so an updated app never shows an old build from the cache.
+      expect(res.headers.get('cache-control')).toBe('no-cache')
     }
   })
 
@@ -32,6 +34,7 @@ describe('serving the built frontend', () => {
     const res = await get(appWithFrontend(), '/assets/app.js')
     expect(res.status).toBe(200)
     expect(await res.text()).toBe('console.log(1)')
+    expect(res.headers.get('cache-control')).toBe('public, max-age=31536000, immutable')
   })
 
   it('keeps /api routes and answers unknown /api paths and missing files with 404', async () => {
