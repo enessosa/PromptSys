@@ -80,6 +80,11 @@ describe('slashMatches', () => {
     expect(slashMatches('hello', cmds)).toEqual([])
     expect(slashMatches('/save', cmds)).toEqual([])
     expect(slashMatches('/save now', cmds)).toEqual([])
+    expect(slashMatches('see /Users/me', cmds)).toEqual([])
+  })
+  it('also matches a command inside a sentence', () => {
+    expect(slashMatches('Führe /pl', cmds)).toEqual(['plantuml'])
+    expect(slashMatches('a/b', cmds)).toEqual([])
   })
 })
 

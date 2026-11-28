@@ -7,7 +7,7 @@ import { ChangesPanel } from './ChangesPanel.tsx'
 import { imageUrl, useCodeSession, useCodeStatus, useGitInfo, useRemoveQueued, useResolveApproval, useSendMessage, useSetPermissionMode, useStopSession } from './hooks.ts'
 import { ModeSwitch } from './ModeSwitch.tsx'
 import { useCards } from '../cards/hooks.ts'
-import { cardMatches, cardMention, formatCost, IMAGE_MAX_BYTES, IMAGE_MAX_COUNT, imageFromDataUrl, isPasteImageType, nextMode, slashMatches, STATUS_LABEL, type PastedImage } from './model.ts'
+import { cardMatches, cardMention, formatCost, IMAGE_MAX_BYTES, IMAGE_MAX_COUNT, imageFromDataUrl, isPasteImageType, nextMode, slashMatches, slashToken, STATUS_LABEL, type PastedImage } from './model.ts'
 import { SidePanel, type SideTab } from './SidePanel.tsx'
 import { StatusLine } from './StatusLine.tsx'
 import { Timeline } from './Timeline.tsx'
@@ -93,7 +93,7 @@ function SessionBody({ sessionId, title, projectPath, state, setMode, showCost }
   const slash = slashMatches(draft, state.slashCommands)
   const cardHits = slash.length === 0 && mention ? cardMatches(allCards ?? [], mention.query) : []
   const matches: Suggestion[] = slash.length > 0
-    ? slash.map((c) => ({ key: `/${c}`, label: `/${c}`, apply: () => `/${c} ` }))
+    ? slash.map((c) => ({ key: `/${c}`, label: `/${c}`, apply: () => `${draft.slice(0, slashToken(draft)?.start ?? 0)}/${c} ` }))
     : cardHits.map((c) => ({ key: `c${c.id}`, label: `c${c.id} ${c.title}`, detail: c.folderPath, apply: () => `${draft.slice(0, mention?.start ?? draft.length)}[c${c.id}] ` }))
   // With the local login the SDK still reports what the turn would cost at API prices; nothing is billed, so it is hidden.
   const cost = showCost ? state.lastResult?.costUsd : undefined

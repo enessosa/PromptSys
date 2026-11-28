@@ -269,10 +269,20 @@ export function splitCardRefs(text: string): Array<string | { cardId: number }> 
   })
 }
 
+/**
+ * The `/command` being typed at the end of the draft: at the start or after a space, so a skill can be named inside a sentence
+ * ("run /plantuml"), like in the terminal. `start` is where the slash sits.
+ */
+export function slashToken(draft: string): { start: number; query: string } | null {
+  const m = /(^|\s)\/([^\s/]*)$/.exec(draft)
+  return m ? { start: m.index + m[1].length, query: m[2] } : null
+}
+
+/** Commands that start with the typed `/word` at the end of the draft (not once it is complete). */
 export function slashMatches(draft: string, commands: string[]): string[] {
-  const m = /^\/([^\s]*)$/.exec(draft)
-  if (!m) return []
-  const q = m[1].toLowerCase()
+  const token = slashToken(draft)
+  if (!token) return []
+  const q = token.query.toLowerCase()
   return commands.filter((c) => c.toLowerCase().startsWith(q) && c.toLowerCase() !== q).slice(0, 8)
 }
 
